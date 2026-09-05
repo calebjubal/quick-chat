@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700&display=swap');
+
+:root {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: #dfe9ec;
+  background: #07121a;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --bg: #07121a;
+  --panel: #0a1720;
+  --panel-soft: #0d1c26;
+  --panel-hover: #112631;
+  --line: rgba(174, 206, 216, 0.1);
+  --text: #e7f0f2;
+  --muted: #78909a;
+  --faint: #506873;
+  --accent: #39d9ca;
+  --accent-deep: #0f706d;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
+body { min-height: 100vh; overflow: hidden; }
+button, input, textarea { font: inherit; }
+button { color: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+::selection { background: rgba(57, 217, 202, 0.25); }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #203741; border-radius: 10px; }

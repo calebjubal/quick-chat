@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Local tooling
+.vercel/
+*.log
+*.local
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# The repository root owns the pnpm workspace and lockfile.
+server/pnpm-lock.yaml
+server/pnpm-workspace.yaml

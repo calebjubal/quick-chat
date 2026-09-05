@@ -1,0 +1,7 @@
+packages:
+  - client
+  - server
+allowBuilds:
+  esbuild: false
+minimumReleaseAgeExclude:
+  - hono@4.13.7
