@@ -1,0 +1,15 @@
+{
+  "name": "@quickchat/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit --pretty false",
+    "typecheck": "tsc --noEmit --pretty false",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": { "zod": "^4.5.4" },
+  "devDependencies": { "typescript": "~6.0.2", "vitest": "^5.0.0" }
+}

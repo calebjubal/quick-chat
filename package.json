@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names client,server \"pnpm --filter ./client run dev\" \"pnpm --filter ./server run dev\"",
     "build": "pnpm --recursive build",
-    "lint": "pnpm --recursive lint"
+    "lint": "pnpm --recursive lint",
+    "typecheck": "pnpm --recursive typecheck",
+    "test": "pnpm --recursive test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +23,8 @@
   },
   "type": "module",
   "devDependencies": {
-    "concurrently": "^10.0.5"
+    "@playwright/test": "^1.62.1",
+    "concurrently": "^10.0.5",
+    "vitest": "^5.0.0"
   }
 }

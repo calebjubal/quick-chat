@@ -1,7 +1,9 @@
 packages:
   - client
   - server
+  - packages/*
 allowBuilds:
+  argon2: true
   esbuild: false
 minimumReleaseAgeExclude:
   - hono@4.13.7

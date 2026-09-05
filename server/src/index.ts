@@ -4,10 +4,11 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { WebSocket, WebSocketServer } from 'ws'
 import { z } from 'zod'
+import { env } from './env.js'
 
 const app = new Hono()
 
-app.use('*', cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }))
+app.use('*', cors({ origin: env.ALLOWED_ORIGINS.split(',') }))
 app.get('/', (context) => context.json({ name: 'Quickchat sync service', status: 'ok' }))
 app.get('/health', (context) => context.json({ status: 'ok', transport: 'websocket' }))
 
@@ -24,7 +25,7 @@ const messageEnvelope = z.object({
 
 const pingEnvelope = z.object({ type: z.literal('ping'), sentAt: z.number() })
 
-const port = Number(process.env.PORT ?? 3000)
+const port = env.PORT
 const server = serve({ fetch: app.fetch, port }, () => {
   console.log(`Quickchat sync service listening on http://localhost:${port}`)
 }) as HttpServer
