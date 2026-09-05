@@ -1,31 +1,54 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700&display=swap');
+@import "tailwindcss";
 
-:root {
-  font-family: 'DM Sans', system-ui, sans-serif;
-  color: #dfe9ec;
-  background: #07121a;
+:root, :root[data-theme='light'] {
+  font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+  color: #102326;
+  background: #f4f7f7;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  --bg: #07121a;
-  --panel: #0a1720;
-  --panel-soft: #0d1c26;
-  --panel-hover: #112631;
-  --line: rgba(174, 206, 216, 0.1);
-  --text: #e7f0f2;
-  --muted: #78909a;
-  --faint: #506873;
-  --accent: #39d9ca;
-  --accent-deep: #0f706d;
+  --canvas: #f4f7f7;
+  --surface: #ffffff;
+  --surface-subtle: #eaf0f0;
+  --text: #102326;
+  --muted: #5b7074;
+  --border: #d5e0e1;
+  --brand: #0b7169;
+  --brand-hover: #095b56;
+  --outgoing: #d8f3ee;
+  --success: #167a52;
+  --warning: #9a6200;
+  --danger: #b42332;
+  --focus: #157e77;
+  --shadow: 0 24px 80px rgba(31, 55, 58, .12);
+}
+
+:root[data-theme='dark'] {
+  color: #eaf4f4;
+  background: #07171a;
+  --canvas: #07171a;
+  --surface: #0c2024;
+  --surface-subtle: #123038;
+  --text: #eaf4f4;
+  --muted: #9ab0b2;
+  --border: #244248;
+  --brand: #43d0c3;
+  --brand-hover: #65ded3;
+  --outgoing: #145e5b;
+  --success: #47d59a;
+  --warning: #f0b45a;
+  --danger: #ff7d88;
+  --focus: #62ddd1;
+  --shadow: 0 24px 80px rgba(0, 0, 0, .34);
 }
 
 * { box-sizing: border-box; }
-html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
-body { min-height: 100vh; overflow: hidden; }
+html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
+body { min-height: 100vh; background: var(--canvas); color: var(--text); }
 button, input, textarea { font: inherit; }
-button { color: inherit; }
-button, a { -webkit-tap-highlight-color: transparent; }
-::selection { background: rgba(57, 217, 202, 0.25); }
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #203741; border-radius: 10px; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--focus) 34%, transparent); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--brand) 25%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
