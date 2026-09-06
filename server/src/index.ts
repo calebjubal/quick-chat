@@ -7,14 +7,17 @@ import { z } from 'zod'
 import { app } from './app.js'
 import { env } from './env.js'
 import { authenticateUpgrade } from './sync/authenticate.js'
-import { closeRedis } from './sync/stream.js'
-import { closeDatabase } from './db/client.js'
+import { closeRedis, startEventRelay } from './sync/stream.js'
+import { closeDatabase, db } from './db/client.js'
 import { removePresence, setTyping, touchPresence } from './presence/service.js'
 import { canSendTransientEvent } from './safety/service.js'
 import { shutdownTelemetry } from './ops/instrumentation.js'
 import { logger } from './ops/logger.js'
 import { callEnvelope, callRecipient, callSignalPayload } from './calls/service.js'
 import { publishCallSignal, startCallRelay } from './calls/relay.js'
+import { conversationMembers } from './db/schema.js'
+import { eq } from 'drizzle-orm'
+import { liveEventEnvelope } from './sync/envelope.js'
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => logger.info({ port: env.PORT }, 'Quickchat API listening')) as HttpServer
 const sockets = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 })
@@ -22,6 +25,11 @@ const userSockets = new Map<string, Set<WebSocket>>()
 const instanceId = randomUUID()
 const sendToLocalUser = (userId: string, envelope: Record<string, unknown>) => { const encoded = JSON.stringify(envelope); for (const peer of userSockets.get(userId) ?? []) if (peer.readyState === WebSocket.OPEN) peer.send(encoded) }
 const callRelay = startCallRelay(instanceId, ({ recipientId, envelope }) => sendToLocalUser(recipientId, envelope)).catch(() => undefined)
+const eventRelay = startEventRelay(async (conversationId, event) => {
+  const members = await db.select({ userId: conversationMembers.userId }).from(conversationMembers).where(eq(conversationMembers.conversationId, conversationId))
+  const envelope = liveEventEnvelope(conversationId, event)
+  for (const member of members) sendToLocalUser(member.userId, envelope)
+}).catch(() => undefined)
 
 sockets.on('connection', async (socket, request) => {
   const auth = await authenticateUpgrade(request).catch(() => null)
@@ -54,7 +62,7 @@ sockets.on('connection', async (socket, request) => {
 })
 
 async function shutdown() {
-  sockets.close(); const stopCallRelay = await callRelay; await stopCallRelay?.(); await Promise.allSettled([closeRedis(), closeDatabase(), shutdownTelemetry()]); server.close(() => process.exit(0))
+  sockets.close(); const [stopCallRelay, stopEventRelay] = await Promise.all([callRelay, eventRelay]); await Promise.all([stopCallRelay?.(), stopEventRelay?.()]); await Promise.allSettled([closeRedis(), closeDatabase(), shutdownTelemetry()]); server.close(() => process.exit(0))
   setTimeout(() => process.exit(1), 10000).unref()
 }
 process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown)
