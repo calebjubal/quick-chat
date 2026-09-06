@@ -5,6 +5,7 @@ const serverEnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://127.0.0.1:5173'),
   DATABASE_URL: z.string().url().default('postgres://quickchat:quickchat@localhost:5432/quickchat'),
+  REDIS_URL: z.string().url().default('redis://localhost:6379'),
   APP_URL: z.string().url().default('http://localhost:5173'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   SMTP_HOST: z.string().optional(),

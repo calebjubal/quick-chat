@@ -1,56 +1,37 @@
+import { clientSocketEventSchema } from '@quickchat/contracts'
 import { serve } from '@hono/node-server'
 import type { Server as HttpServer } from 'node:http'
-import { WebSocket, WebSocketServer } from 'ws'
-import { z } from 'zod'
-import { env } from './env.js'
+import { randomUUID } from 'node:crypto'
+import { WebSocketServer } from 'ws'
 import { app } from './app.js'
+import { env } from './env.js'
+import { authenticateUpgrade } from './sync/authenticate.js'
+import { closeRedis } from './sync/stream.js'
+import { closeDatabase } from './db/client.js'
 
-const messageEnvelope = z.object({
-  type: z.literal('message'),
-  clientId: z.string().min(1),
-  chatId: z.string().min(1),
-  message: z.object({
-    id: z.number(),
-    body: z.string().trim().min(1).max(4000),
-    time: z.string(),
-  }),
-})
+const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`Quickchat API listening on http://localhost:${env.PORT}`)) as HttpServer
+const sockets = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 })
 
-const pingEnvelope = z.object({ type: z.literal('ping'), sentAt: z.number() })
-
-const port = env.PORT
-const server = serve({ fetch: app.fetch, port }, () => {
-  console.log(`Quickchat sync service listening on http://localhost:${port}`)
-}) as HttpServer
-const sockets = new WebSocketServer({ server, path: '/ws' })
-
-sockets.on('connection', (socket) => {
-  socket.on('message', (payload) => {
+sockets.on('connection', async (socket, request) => {
+  const auth = await authenticateUpgrade(request).catch(() => null)
+  if (!auth) return socket.close(1008, 'Authentication required')
+  let alive = true
+  socket.on('pong', () => { alive = true })
+  socket.on('message', (raw) => {
     let value: unknown
-    try {
-      value = JSON.parse(payload.toString())
-    } catch {
-      socket.send(JSON.stringify({ type: 'error', message: 'Invalid JSON payload' }))
-      return
-    }
-
-    const ping = pingEnvelope.safeParse(value)
-    if (ping.success) {
-      socket.send(JSON.stringify({ type: 'pong', sentAt: ping.data.sentAt }))
-      return
-    }
-
-    const message = messageEnvelope.safeParse(value)
-    if (!message.success) {
-      socket.send(JSON.stringify({ type: 'error', message: 'Invalid message payload' }))
-      return
-    }
-
-    const encoded = JSON.stringify(message.data)
-    for (const client of sockets.clients) {
-      if (client.readyState === WebSocket.OPEN) client.send(encoded)
-    }
+    try { value = JSON.parse(raw.toString()) } catch { return socket.close(1007, 'Invalid payload') }
+    const event = clientSocketEventSchema.safeParse(value)
+    if (!event.success) return socket.send(JSON.stringify({ version: 1, type: 'error', eventId: randomUUID(), requestId: typeof value === 'object' && value && 'requestId' in value ? String(value.requestId) : undefined, occurredAt: new Date().toISOString(), payload: { code: 'INVALID_EVENT' } }))
+    if (event.data.type === 'ping') socket.send(JSON.stringify({ version: 1, type: 'pong', eventId: randomUUID(), requestId: event.data.requestId, occurredAt: new Date().toISOString(), payload: { sentAt: event.data.sentAt } }))
   })
+  const heartbeat = setInterval(() => { if (!alive) return socket.terminate(); alive = false; socket.ping() }, 30000)
+  socket.on('close', () => clearInterval(heartbeat))
 })
 
-export default app
+async function shutdown() {
+  sockets.close(); await Promise.allSettled([closeRedis(), closeDatabase()]); server.close(() => process.exit(0))
+  setTimeout(() => process.exit(1), 10000).unref()
+}
+process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown)
+
+export { app }

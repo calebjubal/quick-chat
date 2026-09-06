@@ -19,3 +19,13 @@ export const websocketEnvelopeSchema = z.object({
 
 export type ApiError = z.infer<typeof apiErrorSchema>
 export type WebsocketEnvelope = z.infer<typeof websocketEnvelopeSchema>
+
+export const clientSocketEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('ping'), requestId: z.string().uuid(), sentAt: z.number() }),
+  z.object({ type: z.literal('sync.resume'), requestId: z.string().uuid(), cursor: z.string().nullable() }),
+  z.object({ type: z.literal('message.create'), requestId: z.string().uuid(), conversationId: z.string().uuid(), payload: z.unknown() }),
+  z.object({ type: z.literal('receipt.update'), requestId: z.string().uuid(), conversationId: z.string().uuid(), payload: z.unknown() }),
+  z.object({ type: z.literal('typing.update'), requestId: z.string().uuid(), conversationId: z.string().uuid(), payload: z.unknown() }),
+])
+
+export type ClientSocketEvent = z.infer<typeof clientSocketEventSchema>
