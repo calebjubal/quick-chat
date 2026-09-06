@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { db } from '../db/client.js'
-import { directConversationPairs, users } from '../db/schema.js'
+import { conversationMembers, conversations, directConversationPairs, users } from '../db/schema.js'
 import { canSendTransientEvent } from '../safety/service.js'
 
 export const callSignalPayload = z.discriminatedUnion('kind', [
@@ -17,8 +17,16 @@ export async function callRecipient(conversationId: string, senderId: string) {
   const [sender] = await db.select({ accountKind: users.accountKind }).from(users).where(eq(users.id, senderId)).limit(1)
   if (sender?.accountKind !== 'registered') return null
   const [pair] = await db.select().from(directConversationPairs).where(eq(directConversationPairs.conversationId, conversationId)).limit(1)
-  if (!pair || (pair.firstUserId !== senderId && pair.secondUserId !== senderId)) return null
-  const recipientId = pair.firstUserId === senderId ? pair.secondUserId : pair.firstUserId
+  let recipientId: string | undefined
+  if (pair && (pair.firstUserId === senderId || pair.secondUserId === senderId)) recipientId = pair.firstUserId === senderId ? pair.secondUserId : pair.firstUserId
+  if (!recipientId) {
+    const [conversation] = await db.select({ type: conversations.type }).from(conversations).innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, conversations.id), eq(conversationMembers.userId, senderId))).where(eq(conversations.id, conversationId)).limit(1)
+    if (conversation?.type !== 'shared') return null
+    const members = await db.select({ userId: conversationMembers.userId }).from(conversationMembers).where(eq(conversationMembers.conversationId, conversationId)).limit(3)
+    if (members.length !== 2) return null
+    recipientId = members.find((member) => member.userId !== senderId)?.userId
+  }
+  if (!recipientId) return null
   const [recipient] = await db.select({ accountKind: users.accountKind }).from(users).where(eq(users.id, recipientId)).limit(1)
   return recipient?.accountKind === 'registered' ? recipientId : null
 }

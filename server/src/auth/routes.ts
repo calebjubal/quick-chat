@@ -9,8 +9,8 @@ import { type AppVariables, requireAuth, sessionCookieName } from './middleware.
 import { sendAccountEmail } from './mailer.js'
 import { createToken, hashPassword, hashToken, normalizeEmail, verifyPassword } from './security.js'
 import { randomUUID } from 'node:crypto'
+import { guestUpgradeSchema, passwordSchema } from './validation.js'
 
-const passwordSchema = z.string().min(12).max(128)
 const auth = new Hono<{ Variables: AppVariables }>()
 const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === 'production' || env.COOKIE_SAME_SITE === 'None', sameSite: env.COOKIE_SAME_SITE, path: '/', maxAge: env.SESSION_TTL_DAYS * 86400 }
 
@@ -42,6 +42,25 @@ auth.post('/guest', async (context) => {
   return context.json({ user: { id: guest.id, displayName: guest.displayName, username: null, isGuest: true }, csrfToken: csrf }, 201)
 })
 
+auth.post('/guest/upgrade', requireAuth, async (context) => {
+  const actor = context.get('user')
+  if (!actor.isGuest) return context.json({ error: { code: 'ALREADY_REGISTERED', message: 'This profile already has an account' } }, 409)
+  const input = guestUpgradeSchema.parse(await context.req.json())
+  const emailNormalized = normalizeEmail(input.email)
+  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.emailNormalized, emailNormalized)).limit(1)
+  if (existing && existing.id !== actor.id) return context.json({ error: { code: 'EMAIL_TAKEN', message: 'An account already exists for this email' } }, 409)
+  const verificationToken = createToken()
+  await db.transaction(async (tx) => {
+    await tx.update(users).set({ email: input.email.trim(), emailNormalized, emailVerifiedAt: null, accountKind: 'registered', updatedAt: new Date() }).where(eq(users.id, actor.id))
+    await tx.insert(credentials).values({ userId: actor.id, passwordHash: await hashPassword(input.password) })
+    await tx.insert(accountTokens).values({ userId: actor.id, type: 'verify_email', tokenHash: hashToken(verificationToken), expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })
+    await tx.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.userId, actor.id))
+  })
+  await sendAccountEmail(input.email.trim(), 'Verify your Quickchat account', `${env.APP_URL}/verify?token=${encodeURIComponent(verificationToken)}`)
+  deleteCookie(context, sessionCookieName, { path: '/' })
+  return context.json({ upgraded: true, verificationRequired: true })
+})
+
 auth.post('/login', async (context) => {
   const input = z.object({ email: z.string().email(), password: z.string().max(128) }).parse(await context.req.json())
   const [record] = await db.select({ user: users, passwordHash: credentials.passwordHash }).from(users).innerJoin(credentials, eq(credentials.userId, users.id)).where(eq(users.emailNormalized, normalizeEmail(input.email))).limit(1)
@@ -59,6 +78,17 @@ auth.post('/verify', async (context) => {
   if (!record) return context.json({ error: { code: 'INVALID_TOKEN', message: 'Verification link is invalid or expired' } }, 400)
   await db.transaction(async (tx) => { await tx.update(users).set({ emailVerifiedAt: new Date() }).where(eq(users.id, record.userId)); await tx.update(accountTokens).set({ consumedAt: new Date() }).where(eq(accountTokens.id, record.id)) })
   return context.json({ verified: true })
+})
+
+auth.post('/verification/resend', async (context) => {
+  const { email } = z.object({ email: z.string().email() }).parse(await context.req.json())
+  const [user] = await db.select().from(users).where(eq(users.emailNormalized, normalizeEmail(email))).limit(1)
+  if (user && user.accountKind === 'registered' && !user.emailVerifiedAt) {
+    const token = createToken()
+    await db.insert(accountTokens).values({ userId: user.id, type: 'verify_email', tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })
+    await sendAccountEmail(user.email, 'Verify your Quickchat account', `${env.APP_URL}/verify?token=${encodeURIComponent(token)}`)
+  }
+  return context.json({ accepted: true })
 })
 
 auth.get('/session', requireAuth, (context) => context.json({ user: context.get('user') }))
