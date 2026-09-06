@@ -11,7 +11,7 @@ import { createToken, hashPassword, hashToken, normalizeEmail, verifyPassword } 
 
 const passwordSchema = z.string().min(12).max(128)
 const auth = new Hono<{ Variables: AppVariables }>()
-const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'Lax' as const, path: '/', maxAge: env.SESSION_TTL_DAYS * 86400 }
+const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === 'production' || env.COOKIE_SAME_SITE === 'None', sameSite: env.COOKIE_SAME_SITE, path: '/', maxAge: env.SESSION_TTL_DAYS * 86400 }
 
 auth.post('/register', async (context) => {
   const input = z.object({ email: z.string().email(), password: passwordSchema, displayName: z.string().trim().min(1).max(80) }).parse(await context.req.json())

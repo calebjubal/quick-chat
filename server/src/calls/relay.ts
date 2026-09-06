@@ -4,6 +4,7 @@ type RelayMessage = { originId: string; recipientId: string; envelope: Record<st
 
 export async function startCallRelay(originId: string, receive: (message: RelayMessage) => void) {
   const subscriber = getRedis().duplicate(); await subscriber.subscribe('quickchat:calls')
+  subscriber.on('error', () => undefined)
   subscriber.on('message', (_channel, raw) => { try { const message = JSON.parse(raw) as RelayMessage; if (message.originId !== originId) receive(message) } catch { /* Ignore invalid internal events. */ } })
   return () => subscriber.quit()
 }

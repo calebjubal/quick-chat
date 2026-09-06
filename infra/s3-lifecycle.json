@@ -1,0 +1,17 @@
+{
+  "Rules": [
+    {
+      "ID": "remove-abandoned-quarantine-objects",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "quarantine/" },
+      "Expiration": { "Days": 2 },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    },
+    {
+      "ID": "remove-noncurrent-media-versions",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "media/" },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 7 }
+    }
+  ]
+}

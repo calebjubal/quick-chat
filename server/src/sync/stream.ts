@@ -1,8 +1,12 @@
 import { Redis } from 'ioredis'
 import { env } from '../env.js'
+import { logger } from '../ops/logger.js'
 
 let redis: Redis | undefined
-export const getRedis = () => redis ??= new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 2 })
+export const getRedis = () => {
+  if (!redis) { redis = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 2 }); redis.on('error', (error) => logger.warn({ error: error.message }, 'Redis connection error')) }
+  return redis
+}
 
 export async function publishEvent(shardKey: string, event: Record<string, unknown>) {
   const client = getRedis()

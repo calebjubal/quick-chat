@@ -27,6 +27,17 @@ const serverEnvSchema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   RATE_LIMIT_SALT: z.string().min(16).default('quickchat-development-rate-limit-salt'),
   GLOBAL_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
+  COOKIE_SAME_SITE: z.enum(['Lax', 'Strict', 'None']).default('Lax'),
+  WORKER_INTERVAL_MS: z.coerce.number().int().min(1000).default(5000),
+  CLAMAV_HOST: z.string().default('localhost'),
+  CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
+}).superRefine((value, context) => {
+  if (value.NODE_ENV !== 'production') return
+  if (value.ALLOWED_ORIGINS.includes('localhost') || value.ALLOWED_ORIGINS.includes('127.0.0.1')) context.addIssue({ code: 'custom', path: ['ALLOWED_ORIGINS'], message: 'Production origins cannot use localhost' })
+  if (value.RATE_LIMIT_SALT === 'quickchat-development-rate-limit-salt') context.addIssue({ code: 'custom', path: ['RATE_LIMIT_SALT'], message: 'Set a unique production rate-limit salt' })
+  if (!value.SMTP_HOST) context.addIssue({ code: 'custom', path: ['SMTP_HOST'], message: 'SMTP is required in production' })
+  if (!value.VAPID_PUBLIC_KEY || !value.VAPID_PRIVATE_KEY) context.addIssue({ code: 'custom', path: ['VAPID_PUBLIC_KEY'], message: 'VAPID keys are required in production' })
+  if (value.CLAMAV_HOST === 'localhost') context.addIssue({ code: 'custom', path: ['CLAMAV_HOST'], message: 'Configure the production malware scanner host' })
 })
 
 export const env = serverEnvSchema.parse(process.env)

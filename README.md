@@ -53,3 +53,10 @@ Keep server/ as a long-running Node.js application:
 - Docker packages the server.
 - REST is used for authentication, initial sync and media-upload URLs.
 - WebSocket is used for message events, acknowledgements, presence and typing.
+- One-to-one calls use WebRTC with authenticated WebSocket signaling and production TURN credentials.
+
+## Local production stack
+
+Run `docker compose up --build` to start PostgreSQL, Redis, MinIO, the migration release job, API, and background worker. The local credentials in `compose.yaml` are intentionally development-only and must never be copied to a deployed environment.
+
+The complete production checklist, backup and rollback requirements, health probes, Vercel setup, and Mumbai topology are in [docs/deployment.md](docs/deployment.md).

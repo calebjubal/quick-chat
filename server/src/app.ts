@@ -18,6 +18,9 @@ import { captureException } from './ops/instrumentation.js'
 import { logger } from './ops/logger.js'
 import { observeRequests, protectOrigin, rateLimit } from './ops/middleware.js'
 import type { AppVariables } from './auth/middleware.js'
+import { db } from './db/client.js'
+import { sql } from 'drizzle-orm'
+import { getRedis } from './sync/stream.js'
 
 export const app = new Hono<{ Variables: AppVariables }>()
 app.use('*', observeRequests)
@@ -29,6 +32,13 @@ app.use('/api/*', rateLimit())
 app.use('/api/v1/auth/*', rateLimit(30, 'auth'))
 app.get('/', (context) => context.json({ name: 'Quickchat API', status: 'ok' }))
 app.get('/health', (context) => context.json({ status: 'ok', transport: 'websocket' }))
+app.get('/health/live', (context) => context.json({ status: 'live' }))
+app.get('/health/ready', async (context) => {
+  const dependencies = { postgres: false, redis: false }
+  try { await db.execute(sql`select 1`); dependencies.postgres = true } catch { /* Report dependency as unavailable. */ }
+  try { dependencies.redis = await getRedis().ping() === 'PONG' } catch { /* Report dependency as unavailable. */ }
+  return dependencies.postgres && dependencies.redis ? context.json({ status: 'ready', dependencies }) : context.json({ status: 'not_ready', dependencies }, 503)
+})
 app.route('/api/v1/auth', auth)
 app.route('/api/v1', profile)
 app.route('/api/v1/conversations', conversationRoutes)
