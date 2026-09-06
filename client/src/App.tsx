@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { AlertCircle, ArrowRight, LoaderCircle, MessageCircle, Moon, Search, Sun, Users } from 'lucide-react'
 import { clientEnv } from './env'
 import { applyTheme, type ThemePreference } from './theme'
@@ -38,7 +38,24 @@ function ThemeToggle() {
   return <button className="icon-button theme-toggle" onClick={cycle} aria-label={`Theme: ${preference}. Change theme`} title={`Theme: ${preference}`}>{preference === 'dark' ? <Moon size={18} /> : <Sun size={18} />}</button>
 }
 
-function AuthScreen() {
+function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: SessionUser) => void }) {
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setBusy(true); setMessage('')
+    const form = new FormData(event.currentTarget)
+    const endpoint = mode === 'login' ? 'login' : mode === 'register' ? 'register' : 'password/request'
+    const body = Object.fromEntries(form.entries())
+    try {
+      const response = await fetch(`${clientEnv.VITE_API_URL}/api/v1/auth/${endpoint}`, { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+      const data = await response.json() as { user?: SessionUser; error?: { message: string } }
+      if (!response.ok) throw new Error(data.error?.message ?? 'Request failed')
+      if (data.user) onAuthenticated(data.user)
+      else setMessage(mode === 'register' ? 'Check your email to verify your account.' : 'If that email exists, a reset link is on its way.')
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Request failed') }
+    finally { setBusy(false) }
+  }
   return (
     <main className="auth-page">
       <div className="auth-glow" />
@@ -51,13 +68,15 @@ function AuthScreen() {
           <div className="trust-row"><span><span className="status-dot" /> Live delivery</span><span>Encrypted transport</span><span>No public directory</span></div>
         </div>
         <div className="auth-card">
-          <div className="auth-card-heading"><span className="mobile-brand"><Brand /></span><h2>Welcome back</h2><p>Sign in to continue to your conversations.</p></div>
-          <form aria-label="Sign in" onSubmit={(event) => event.preventDefault()}>
-            <label>Email address<input type="email" autoComplete="email" placeholder="you@example.com" required /></label>
-            <label>Password<span className="label-row"><span /><button type="button">Forgot password?</button></span><input type="password" autoComplete="current-password" placeholder="Your password" required /></label>
-            <button className="primary-button" type="submit">Sign in <ArrowRight size={17} /></button>
+          <div className="auth-card-heading"><span className="mobile-brand"><Brand /></span><h2>{mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Create your account' : 'Reset your password'}</h2><p>{mode === 'login' ? 'Sign in to continue to your conversations.' : mode === 'register' ? 'Start private conversations on any device.' : 'We will email you a secure reset link.'}</p></div>
+          <form aria-label={mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : 'Reset password'} onSubmit={submit}>
+            {mode === 'register' && <label>Display name<input name="displayName" autoComplete="name" placeholder="Your name" required /></label>}
+            <label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></label>
+            {mode !== 'forgot' && <label>Password<span className="label-row"><span />{mode === 'login' && <button type="button" onClick={() => setMode('forgot')}>Forgot password?</button>}</span><input name="password" type="password" minLength={12} maxLength={128} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="At least 12 characters" required /></label>}
+            {message && <p className="form-message" role="status">{message}</p>}
+            <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : 'Send reset link'} {!busy && <ArrowRight size={17} />}</button>
           </form>
-          <div className="auth-footer">New to Quickchat? <button type="button">Create an account</button></div>
+          <div className="auth-footer">{mode === 'login' ? 'New to Quickchat?' : 'Already have an account?'} <button type="button" onClick={() => { setMessage(''); setMode(mode === 'login' ? 'register' : 'login') }}>{mode === 'login' ? 'Create an account' : 'Sign in'}</button></div>
         </div>
       </section>
     </main>
@@ -96,7 +115,7 @@ function App() {
 
   if (session.status === 'loading') return <main className="state-page"><Brand /><LoaderCircle className="spinner" size={27} /><p>Loading your conversations…</p></main>
   if (session.status === 'error') return <main className="state-page"><Brand /><span className="error-icon"><AlertCircle size={25} /></span><h1>Connection interrupted</h1><p>{session.message}</p><button className="secondary-button" onClick={() => { setSession({ status: 'loading' }); loadSession() }}>Try again</button></main>
-  if (session.status === 'unauthenticated') return <AuthScreen />
+  if (session.status === 'unauthenticated') return <AuthScreen onAuthenticated={(user) => setSession({ status: 'authenticated', user })} />
   return <EmptyWorkspace user={session.user} />
 }
 

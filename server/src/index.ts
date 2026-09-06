@@ -1,16 +1,9 @@
 import { serve } from '@hono/node-server'
 import type { Server as HttpServer } from 'node:http'
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 import { WebSocket, WebSocketServer } from 'ws'
 import { z } from 'zod'
 import { env } from './env.js'
-
-const app = new Hono()
-
-app.use('*', cors({ origin: env.ALLOWED_ORIGINS.split(',') }))
-app.get('/', (context) => context.json({ name: 'Quickchat sync service', status: 'ok' }))
-app.get('/health', (context) => context.json({ status: 'ok', transport: 'websocket' }))
+import { app } from './app.js'
 
 const messageEnvelope = z.object({
   type: z.literal('message'),
