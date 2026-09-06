@@ -6,6 +6,7 @@ import { db } from '../db/client.js'
 import { conversationMembers, conversations, eventOutbox, messages } from '../db/schema.js'
 import { publishEvent } from '../sync/stream.js'
 import { MAX_MESSAGE_LENGTH, messageCursor, parseMessageCursor } from './rules.js'
+import { notifyConversation } from '../notifications/service.js'
 
 const routes = new Hono<{ Variables: AppVariables }>()
 routes.use('*', requireAuth)
@@ -38,6 +39,7 @@ routes.post('/conversations/:conversationId/messages', async (context) => {
     return { message, outboxId: outbox.id }
   })
   publishEvent(conversationId, { type: 'message.created', ...event }).catch(() => undefined)
+  notifyConversation(conversationId, senderId, context.get('user').displayName).catch(() => undefined)
   return context.json({ message: event.message }, 201)
 })
 

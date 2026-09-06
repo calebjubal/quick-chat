@@ -19,6 +19,9 @@ const serverEnvSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(26214400),
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default('mailto:ops@quickchat.local'),
 })
 
 export const env = serverEnvSchema.parse(process.env)

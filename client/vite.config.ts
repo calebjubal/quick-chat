@@ -8,6 +8,6 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), VitePWA({
     registerType: 'autoUpdate',
     manifest: { name: 'Quickchat', short_name: 'Quickchat', description: 'Fast, focused messaging', theme_color: '#07171A', background_color: '#07171A', display: 'standalone', start_url: '/', icons: [{ src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }] },
-    workbox: { navigateFallback: '/index.html', runtimeCaching: [], cleanupOutdatedCaches: true },
+    workbox: { navigateFallback: '/index.html', runtimeCaching: [], cleanupOutdatedCaches: true, importScripts: ['/push-handler.js'] },
   })],
 })
