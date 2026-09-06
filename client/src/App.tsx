@@ -103,7 +103,7 @@ function App() {
   if (session.status === 'loading') return <main className="state-page"><Brand /><LoaderCircle className="spinner" size={27} /><p>Loading your conversations…</p></main>
   if (session.status === 'error') return <main className="state-page"><Brand /><span className="error-icon"><AlertCircle size={25} /></span><h1>Connection interrupted</h1><p>{session.message}</p><button className="secondary-button" onClick={() => { setSession({ status: 'loading' }); loadSession() }}>Try again</button></main>
   if (session.status === 'unauthenticated') return <AuthScreen onAuthenticated={(user) => setSession({ status: 'authenticated', user })} />
-  return <ChatWorkspace user={{ ...session.user, username: session.user.username ?? '' }} />
+  return <ChatWorkspace user={{ ...session.user, username: session.user.username ?? '' }} onSignedOut={() => setSession({ status: 'unauthenticated' })} />
 }
 
 export default App
