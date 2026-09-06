@@ -6,18 +6,23 @@ import { sessions, users } from '../db/schema.js'
 import { env } from '../env.js'
 import { hashToken } from './security.js'
 
-export type AuthUser = { id: string; email: string; displayName: string; username: string | null; emailVerified: boolean }
+export type AuthUser = { id: string; email: string; displayName: string; username: string | null; emailVerified: boolean; isGuest: boolean }
 export type AppVariables = { user: AuthUser; sessionId: string; requestId: string }
 export const sessionCookieName = env.NODE_ENV === 'production' ? '__Host-quickchat_session' : 'quickchat_session'
 
 export const requireAuth = createMiddleware<{ Variables: AppVariables }>(async (context, next) => {
   const raw = getCookie(context, sessionCookieName)
   if (!raw) return context.json({ error: { code: 'UNAUTHENTICATED', message: 'Sign in required' } }, 401)
-  const [record] = await db.select({ sessionId: sessions.id, userId: users.id, email: users.email, displayName: users.displayName, username: users.username, verifiedAt: users.emailVerifiedAt })
+  const [record] = await db.select({ sessionId: sessions.id, userId: users.id, email: users.email, displayName: users.displayName, username: users.username, verifiedAt: users.emailVerifiedAt, accountKind: users.accountKind })
     .from(sessions).innerJoin(users, eq(users.id, sessions.userId))
     .where(and(eq(sessions.tokenHash, hashToken(raw)), gt(sessions.expiresAt, new Date()), isNull(sessions.revokedAt), isNull(users.deletionScheduledAt))).limit(1)
   if (!record) return context.json({ error: { code: 'UNAUTHENTICATED', message: 'Session expired' } }, 401)
-  context.set('user', { id: record.userId, email: record.email, displayName: record.displayName, username: record.username, emailVerified: Boolean(record.verifiedAt) })
+  context.set('user', { id: record.userId, email: record.email, displayName: record.displayName, username: record.username, emailVerified: Boolean(record.verifiedAt), isGuest: record.accountKind === 'guest' })
   context.set('sessionId', record.sessionId)
+  await next()
+})
+
+export const requireRegistered = createMiddleware<{ Variables: AppVariables }>(async (context, next) => {
+  if (context.get('user').isGuest) return context.json({ error: { code: 'ACCOUNT_REQUIRED', message: 'Create an account to use this feature' } }, 403)
   await next()
 })

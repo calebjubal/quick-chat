@@ -8,7 +8,8 @@ const timestamps = {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }
 
-export const conversationType = pgEnum('conversation_type', ['direct', 'group'])
+export const conversationType = pgEnum('conversation_type', ['direct', 'group', 'shared'])
+export const accountKind = pgEnum('account_kind', ['registered', 'guest'])
 export const memberRole = pgEnum('member_role', ['owner', 'admin', 'member'])
 export const messageKind = pgEnum('message_kind', ['text', 'image', 'video', 'audio', 'voice', 'document', 'system'])
 export const attachmentStatus = pgEnum('attachment_status', ['pending', 'quarantined', 'ready', 'rejected'])
@@ -24,6 +25,7 @@ export const users = pgTable('users', {
   username: varchar('username', { length: 32 }),
   usernameNormalized: varchar('username_normalized', { length: 32 }),
   displayName: varchar('display_name', { length: 80 }).notNull(),
+  accountKind: accountKind('account_kind').default('registered').notNull(),
   about: varchar('about', { length: 160 }),
   avatarKey: text('avatar_key'),
   theme: varchar('theme', { length: 10 }).default('system').notNull(),
@@ -70,6 +72,7 @@ export const conversations = pgTable('conversations', {
   createdBy: uuid('created_by').notNull().references(() => users.id),
   nextSequence: bigint('next_sequence', { mode: 'number' }).default(1).notNull(),
   disappearingSeconds: integer('disappearing_seconds'),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
   ...timestamps,
 })
 
@@ -83,6 +86,7 @@ export const conversationMembers = pgTable('conversation_members', {
   conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   role: memberRole('role').default('member').notNull(),
+  nickname: varchar('nickname', { length: 80 }),
   lastDeliveredSequence: bigint('last_delivered_sequence', { mode: 'number' }).default(0).notNull(),
   lastReadSequence: bigint('last_read_sequence', { mode: 'number' }).default(0).notNull(),
   deletedThroughSequence: bigint('deleted_through_sequence', { mode: 'number' }).default(0).notNull(),

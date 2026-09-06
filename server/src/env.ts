@@ -31,6 +31,10 @@ const serverEnvSchema = z.object({
   WORKER_INTERVAL_MS: z.coerce.number().int().min(1000).default(5000),
   CLAMAV_HOST: z.string().default('localhost'),
   CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
+  GUEST_MESSAGE_LIMIT_PER_DAY: z.coerce.number().int().positive().default(50),
+  USER_MESSAGE_LIMIT_PER_DAY: z.coerce.number().int().positive().default(1000),
+  GUEST_VOICE_LIMIT_PER_DAY: z.coerce.number().int().positive().default(10),
+  USER_FILE_LIMIT_PER_DAY: z.coerce.number().int().positive().default(100),
 }).superRefine((value, context) => {
   if (value.NODE_ENV !== 'production') return
   if (value.ALLOWED_ORIGINS.includes('localhost') || value.ALLOWED_ORIGINS.includes('127.0.0.1')) context.addIssue({ code: 'custom', path: ['ALLOWED_ORIGINS'], message: 'Production origins cannot use localhost' })

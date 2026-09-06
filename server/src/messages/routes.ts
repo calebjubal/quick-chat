@@ -1,13 +1,14 @@
-import { and, desc, eq, ilike, lt, sql } from 'drizzle-orm'
+import { and, count, desc, eq, gte, ilike, inArray, isNull, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { type AppVariables, requireAuth } from '../auth/middleware.js'
 import { db } from '../db/client.js'
-import { conversationMembers, conversations, eventOutbox, messages } from '../db/schema.js'
+import { attachments, conversationMembers, conversations, eventOutbox, messages } from '../db/schema.js'
 import { publishEvent } from '../sync/stream.js'
 import { MAX_MESSAGE_LENGTH, messageCursor, parseMessageCursor } from './rules.js'
 import { notifyConversation } from '../notifications/service.js'
 import { directConversationIsBlocked } from '../safety/service.js'
+import { messageLimitFor } from '../usage/limits.js'
 
 const routes = new Hono<{ Variables: AppVariables }>()
 routes.use('*', requireAuth)
@@ -23,26 +24,34 @@ routes.get('/conversations/:conversationId/messages', async (context) => {
   const limit = Math.min(Number(context.req.query('limit') ?? 50), 100); const before = parseMessageCursor(context.req.query('cursor'))
   const rows = await db.select().from(messages).where(and(eq(messages.conversationId, conversationId), lt(messages.sequence, before))).orderBy(desc(messages.sequence)).limit(limit + 1)
   const hasMore = rows.length > limit; const page = rows.slice(0, limit)
-  return context.json({ messages: page.reverse(), nextCursor: hasMore ? messageCursor(page[page.length - 1].sequence) : null })
+  const media = page.length ? await db.select({ id: attachments.id, messageId: attachments.messageId, fileName: attachments.fileName, kind: attachments.kind, mimeType: attachments.mimeType, metadata: attachments.metadata }).from(attachments).where(inArray(attachments.messageId, page.map((message) => message.id))) : []
+  return context.json({ messages: page.reverse().map((message) => ({ ...message, attachment: media.find((item) => item.messageId === message.id) ?? null })), nextCursor: hasMore ? messageCursor(page[page.length - 1].sequence) : null })
 })
 
 routes.post('/conversations/:conversationId/messages', async (context) => {
   const conversationId = context.req.param('conversationId'); const senderId = context.get('user').id
   if (!(await isMember(conversationId, senderId))) return context.json({ error: { code: 'NOT_FOUND', message: 'Conversation not found' } }, 404)
   if (await directConversationIsBlocked(conversationId)) return context.json({ error: { code: 'MESSAGING_UNAVAILABLE', message: 'Messaging is unavailable for this conversation' } }, 403)
-  const input = z.object({ id: z.string().uuid(), body: z.string().trim().min(1).max(MAX_MESSAGE_LENGTH), replyToId: z.string().uuid().optional(), forwarded: z.boolean().default(false) }).parse(await context.req.json())
+  const input = z.object({ id: z.string().uuid(), body: z.string().trim().min(1).max(MAX_MESSAGE_LENGTH).optional(), attachmentId: z.string().uuid().optional(), replyToId: z.string().uuid().optional(), forwarded: z.boolean().default(false) }).refine((value) => value.body || value.attachmentId, 'A message or attachment is required').parse(await context.req.json())
   const existing = await db.select().from(messages).where(eq(messages.id, input.id)).limit(1)
   if (existing[0]) return context.json({ message: existing[0], deduplicated: true })
+  const actor = context.get('user'); const dailyLimit = messageLimitFor(actor.isGuest)
+  const [usage] = await db.select({ count: count() }).from(messages).where(and(eq(messages.senderId, senderId), gte(messages.createdAt, new Date(Date.now() - 86400000))))
+  if (usage.count >= dailyLimit) return context.json({ error: { code: 'MESSAGE_LIMIT_REACHED', message: `Daily message limit reached (${dailyLimit})` } }, 429)
+  const [attachment] = input.attachmentId ? await db.select().from(attachments).where(and(eq(attachments.id, input.attachmentId), eq(attachments.ownerId, senderId), eq(attachments.status, 'ready'), isNull(attachments.messageId))).limit(1) : []
+  if (input.attachmentId && !attachment) return context.json({ error: { code: 'ATTACHMENT_NOT_READY', message: 'Attachment is not ready to send' } }, 409)
+  if (actor.isGuest && attachment?.kind !== 'voice' && attachment) return context.json({ error: { code: 'ACCOUNT_REQUIRED', message: 'Create an account to send files' } }, 403)
   const event = await db.transaction(async (tx) => {
     const [counter] = await tx.update(conversations).set({ nextSequence: sql`${conversations.nextSequence} + 1`, updatedAt: new Date() }).where(eq(conversations.id, conversationId)).returning({ sequence: conversations.nextSequence, disappearingSeconds: conversations.disappearingSeconds })
     const sequence = counter.sequence - 1
-    const [message] = await tx.insert(messages).values({ ...input, conversationId, senderId, sequence, expiresAt: counter.disappearingSeconds ? new Date(Date.now() + counter.disappearingSeconds * 1000) : null }).returning()
+    const [message] = await tx.insert(messages).values({ id: input.id, body: input.body, replyToId: input.replyToId, forwarded: input.forwarded, kind: attachment?.kind ?? 'text', conversationId, senderId, sequence, expiresAt: counter.disappearingSeconds ? new Date(Date.now() + counter.disappearingSeconds * 1000) : null }).returning()
+    if (attachment) await tx.update(attachments).set({ messageId: message.id }).where(and(eq(attachments.id, attachment.id), isNull(attachments.messageId)))
     const [outbox] = await tx.insert(eventOutbox).values({ aggregateId: conversationId, type: 'message.created', payload: { message, requestId: context.get('requestId') } }).returning()
     return { message, outboxId: outbox.id }
   })
   publishEvent(conversationId, { type: 'message.created', ...event }).catch(() => undefined)
   notifyConversation(conversationId, senderId, context.get('user').displayName).catch(() => undefined)
-  return context.json({ message: event.message }, 201)
+  return context.json({ message: { ...event.message, attachment: attachment ? { id: attachment.id, fileName: attachment.fileName, kind: attachment.kind, mimeType: attachment.mimeType, metadata: attachment.metadata } : null }, quota: { used: usage.count + 1, limit: dailyLimit } }, 201)
 })
 
 routes.patch('/conversations/:conversationId/receipts', async (context) => {

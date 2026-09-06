@@ -8,6 +8,7 @@ import { env } from '../env.js'
 import { type AppVariables, requireAuth, sessionCookieName } from './middleware.js'
 import { sendAccountEmail } from './mailer.js'
 import { createToken, hashPassword, hashToken, normalizeEmail, verifyPassword } from './security.js'
+import { randomUUID } from 'node:crypto'
 
 const passwordSchema = z.string().min(12).max(128)
 const auth = new Hono<{ Variables: AppVariables }>()
@@ -29,6 +30,18 @@ auth.post('/register', async (context) => {
   return context.json({ userId: user.id, verificationRequired: true }, 201)
 })
 
+auth.post('/guest', async (context) => {
+  const { displayName } = z.object({ displayName: z.string().trim().min(1).max(80) }).parse(await context.req.json())
+  const id = randomUUID(); const token = createToken(); const csrf = createToken()
+  const guest = await db.transaction(async (tx) => {
+    const [user] = await tx.insert(users).values({ id, email: `guest-${id}@guest.invalid`, emailNormalized: `guest-${id}@guest.invalid`, emailVerifiedAt: new Date(), displayName, accountKind: 'guest' }).returning()
+    await tx.insert(sessions).values({ userId: id, tokenHash: hashToken(token), csrfHash: hashToken(csrf), expiresAt: new Date(Date.now() + 7 * 86400000), userAgent: context.req.header('user-agent') })
+    return user
+  })
+  setCookie(context, sessionCookieName, token, { ...cookieOptions, maxAge: 7 * 86400 })
+  return context.json({ user: { id: guest.id, displayName: guest.displayName, username: null, isGuest: true }, csrfToken: csrf }, 201)
+})
+
 auth.post('/login', async (context) => {
   const input = z.object({ email: z.string().email(), password: z.string().max(128) }).parse(await context.req.json())
   const [record] = await db.select({ user: users, passwordHash: credentials.passwordHash }).from(users).innerJoin(credentials, eq(credentials.userId, users.id)).where(eq(users.emailNormalized, normalizeEmail(input.email))).limit(1)
@@ -37,7 +50,7 @@ auth.post('/login', async (context) => {
   const token = createToken(); const csrf = createToken()
   await db.insert(sessions).values({ userId: record.user.id, tokenHash: hashToken(token), csrfHash: hashToken(csrf), expiresAt: new Date(Date.now() + env.SESSION_TTL_DAYS * 86400000), userAgent: context.req.header('user-agent') })
   setCookie(context, sessionCookieName, token, cookieOptions)
-  return context.json({ user: { id: record.user.id, displayName: record.user.displayName, username: record.user.username }, csrfToken: csrf })
+  return context.json({ user: { id: record.user.id, displayName: record.user.displayName, username: record.user.username, isGuest: false }, csrfToken: csrf })
 })
 
 auth.post('/verify', async (context) => {
