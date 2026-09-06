@@ -13,5 +13,5 @@ export class VoiceRecorder {
     this.recorder.start(250)
   }
   stop() { return new Promise<Blob>((resolve, reject) => { if (!this.recorder) return reject(new Error('No active recording')); this.recorder.onstop = () => { this.stream?.getTracks().forEach((track) => track.stop()); resolve(new Blob(this.chunks, { type: this.recorder?.mimeType })) }; this.recorder.stop() }) }
-  cancel() { this.recorder?.state !== 'inactive' && this.recorder?.stop(); this.stream?.getTracks().forEach((track) => track.stop()); this.chunks = [] }
+  cancel() { if (this.recorder?.state && this.recorder.state !== 'inactive') this.recorder.stop(); this.stream?.getTracks().forEach((track) => track.stop()); this.chunks = [] }
 }
