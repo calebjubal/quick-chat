@@ -41,6 +41,8 @@ Deploy client/ to Vercel as a static Vite application:
 - No SSR
 - No Next.js
 - No server dependency for opening cached conversations
+- Set `VITE_API_URL=https://<api-host>` and `VITE_WS_URL=wss://<api-host>/ws` in Vercel.
+- Keep the Vercel project Root Directory set to `client`; `client/vercel.json` installs from the workspace lockfile.
 
 ### Backend deployment
 
