@@ -9,7 +9,8 @@ const initials = (value: string) => value.split(/\s+/).map((part) => part[0]).jo
 
 export function ChatWorkspace({ user }: { user: User }) {
   const store = useChatStore(); const [draft, setDraft] = useState(''); const [query, setQuery] = useState(''); const [drawer, setDrawer] = useState(false); const [findOpen, setFindOpen] = useState(false); const [findError, setFindError] = useState('')
-  useEffect(() => { void store.loadConversations() }, [])
+  const loadConversations = store.loadConversations
+  useEffect(() => { void loadConversations() }, [loadConversations])
   const selected = store.conversations.find((entry) => entry.conversation.id === store.selectedId)
   const visible = useMemo(() => store.conversations.filter((entry) => !entry.membership.archivedAt && titleFor(entry).toLowerCase().includes(query.toLowerCase())), [store.conversations, query])
   const messages = store.selectedId ? store.messages[store.selectedId] ?? [] : []
