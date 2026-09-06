@@ -6,6 +6,7 @@ import { invites, users } from '../db/schema.js'
 import { type AppVariables, requireAuth } from '../auth/middleware.js'
 import { createToken, hashToken } from '../auth/security.js'
 import { normalizeUsername, usernameSchema } from './validation.js'
+import { isBlockedBetween } from '../safety/service.js'
 
 const profile = new Hono<{ Variables: AppVariables }>()
 profile.use('*', requireAuth)
@@ -27,6 +28,7 @@ profile.patch('/me', async (context) => {
 profile.get('/users/lookup', async (context) => {
   const username = normalizeUsername(context.req.query('username') ?? '')
   const [user] = await db.select({ id: users.id, displayName: users.displayName, username: users.username, about: users.about, avatarKey: users.avatarKey }).from(users).where(and(eq(users.usernameNormalized, username), isNotNull(users.emailVerifiedAt), isNull(users.deletionScheduledAt))).limit(1)
+  if (user && await isBlockedBetween(context.get('user').id, user.id)) return context.json({ error: { code: 'USER_NOT_FOUND', message: 'No user has that exact username' } }, 404)
   return user ? context.json({ user }) : context.json({ error: { code: 'USER_NOT_FOUND', message: 'No user has that exact username' } }, 404)
 })
 
@@ -38,6 +40,7 @@ profile.post('/invites', async (context) => {
 
 profile.get('/invites/:token', async (context) => {
   const [invite] = await db.select({ id: invites.id, expiresAt: invites.expiresAt, creator: { id: users.id, displayName: users.displayName, username: users.username, avatarKey: users.avatarKey } }).from(invites).innerJoin(users, eq(users.id, invites.createdBy)).where(and(eq(invites.tokenHash, hashToken(context.req.param('token'))), isNull(invites.revokedAt))).limit(1)
+  if (invite && await isBlockedBetween(context.get('user').id, invite.creator.id)) return context.json({ error: { code: 'INVITE_EXPIRED', message: 'This invite is invalid or expired' } }, 404)
   if (!invite || invite.expiresAt <= new Date()) return context.json({ error: { code: 'INVITE_EXPIRED', message: 'This invite is invalid or expired' } }, 404)
   return context.json({ invite })
 })

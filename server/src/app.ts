@@ -9,6 +9,7 @@ import messageActions from './messages/actions.js'
 import mediaRoutes from './media/routes.js'
 import presenceRoutes from './presence/routes.js'
 import notificationRoutes from './notifications/routes.js'
+import safetyRoutes from './safety/routes.js'
 
 export const app = new Hono()
 app.use('*', cors({ origin: env.ALLOWED_ORIGINS.split(','), credentials: true }))
@@ -22,3 +23,4 @@ app.route('/api/v1/messages', messageActions)
 app.route('/api/v1/uploads', mediaRoutes)
 app.route('/api/v1', presenceRoutes)
 app.route('/api/v1/push-subscriptions', notificationRoutes)
+app.route('/api/v1', safetyRoutes)

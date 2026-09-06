@@ -7,6 +7,7 @@ import { conversationMembers, conversations, eventOutbox, messages } from '../db
 import { publishEvent } from '../sync/stream.js'
 import { MAX_MESSAGE_LENGTH, messageCursor, parseMessageCursor } from './rules.js'
 import { notifyConversation } from '../notifications/service.js'
+import { directConversationIsBlocked } from '../safety/service.js'
 
 const routes = new Hono<{ Variables: AppVariables }>()
 routes.use('*', requireAuth)
@@ -28,6 +29,7 @@ routes.get('/conversations/:conversationId/messages', async (context) => {
 routes.post('/conversations/:conversationId/messages', async (context) => {
   const conversationId = context.req.param('conversationId'); const senderId = context.get('user').id
   if (!(await isMember(conversationId, senderId))) return context.json({ error: { code: 'NOT_FOUND', message: 'Conversation not found' } }, 404)
+  if (await directConversationIsBlocked(conversationId)) return context.json({ error: { code: 'MESSAGING_UNAVAILABLE', message: 'Messaging is unavailable for this conversation' } }, 403)
   const input = z.object({ id: z.string().uuid(), body: z.string().trim().min(1).max(MAX_MESSAGE_LENGTH), replyToId: z.string().uuid().optional(), forwarded: z.boolean().default(false) }).parse(await context.req.json())
   const existing = await db.select().from(messages).where(eq(messages.id, input.id)).limit(1)
   if (existing[0]) return context.json({ message: existing[0], deduplicated: true })

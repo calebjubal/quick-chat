@@ -1,10 +1,10 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { type AppVariables, requireAuth } from '../auth/middleware.js'
 import { db } from '../db/client.js'
-import { attachments } from '../db/schema.js'
+import { attachments, conversationMembers, messages } from '../db/schema.js'
 import { env } from '../env.js'
 import { ALLOWED_MEDIA, safeFileName } from './policy.js'
 import { downloadUrl, inspectObject, uploadUrl } from './storage.js'
@@ -32,6 +32,11 @@ routes.post('/:id/finalize', async (context) => {
 routes.get('/:id/download', async (context) => {
   const [attachment] = await db.select().from(attachments).where(eq(attachments.id, context.req.param('id'))).limit(1)
   if (!attachment || attachment.status !== 'ready') return context.json({ error: { code: 'NOT_FOUND', message: 'Attachment is not available' } }, 404)
+  if (attachment.ownerId !== context.get('user').id) {
+    if (!attachment.messageId) return context.json({ error: { code: 'NOT_FOUND', message: 'Attachment is not available' } }, 404)
+    const [authorized] = await db.select({ id: messages.id }).from(messages).innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, messages.conversationId), eq(conversationMembers.userId, context.get('user').id))).where(eq(messages.id, attachment.messageId)).limit(1)
+    if (!authorized) return context.json({ error: { code: 'NOT_FOUND', message: 'Attachment is not available' } }, 404)
+  }
   return context.json({ url: await downloadUrl(attachment.objectKey), expiresIn: 300 })
 })
 export default routes
