@@ -9,7 +9,10 @@
     "lint": "pnpm --recursive lint",
     "typecheck": "pnpm --recursive typecheck",
     "test": "pnpm --recursive test",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "test:e2e": "playwright test",
+    "test:e2e:list": "playwright test --list",
+    "test:load": "k6 run tests/load/messaging.js"
   },
   "keywords": [],
   "author": "",
