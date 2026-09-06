@@ -26,6 +26,10 @@ export const clientSocketEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('message.create'), requestId: z.string().uuid(), conversationId: z.string().uuid(), payload: z.unknown() }),
   z.object({ type: z.literal('receipt.update'), requestId: z.string().uuid(), conversationId: z.string().uuid(), payload: z.unknown() }),
   z.object({ type: z.literal('typing.update'), requestId: z.string().uuid(), conversationId: z.string().uuid(), payload: z.unknown() }),
+  z.object({ type: z.literal('call.offer'), requestId: z.string().uuid(), conversationId: z.string().uuid(), payload: z.unknown() }),
+  z.object({ type: z.literal('call.answer'), requestId: z.string().uuid(), conversationId: z.string().uuid(), payload: z.unknown() }),
+  z.object({ type: z.literal('call.ice'), requestId: z.string().uuid(), conversationId: z.string().uuid(), payload: z.unknown() }),
+  z.object({ type: z.literal('call.end'), requestId: z.string().uuid(), conversationId: z.string().uuid(), payload: z.unknown() }),
 ])
 
 export type ClientSocketEvent = z.infer<typeof clientSocketEventSchema>
