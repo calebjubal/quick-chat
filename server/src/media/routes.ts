@@ -12,11 +12,13 @@ import { downloadUrl, inspectObject, uploadUrl } from './storage.js'
 const routes = new Hono<{ Variables: AppVariables }>()
 routes.use('*', requireAuth)
 routes.post('/', async (context) => {
-  const input = z.object({ fileName: z.string().min(1).max(255), mimeType: z.string(), byteSize: z.number().int().positive().max(env.MAX_UPLOAD_BYTES) }).parse(await context.req.json())
-  const kind = ALLOWED_MEDIA.get(input.mimeType)
+  const input = z.object({ fileName: z.string().min(1).max(255), mimeType: z.string(), byteSize: z.number().int().positive().max(env.MAX_UPLOAD_BYTES), voice: z.boolean().default(false), durationSeconds: z.number().positive().max(900).optional(), waveform: z.array(z.number().min(0).max(1)).max(200).optional() }).parse(await context.req.json())
+  const mediaKind = ALLOWED_MEDIA.get(input.mimeType)
+  const kind = input.voice && mediaKind === 'audio' ? 'voice' : mediaKind
   if (!kind) return context.json({ error: { code: 'UNSUPPORTED_MEDIA', message: 'This file type is not supported' } }, 415)
+  if (input.voice && !input.durationSeconds) return context.json({ error: { code: 'INVALID_VOICE_NOTE', message: 'Voice notes require a duration' } }, 422)
   const id = randomUUID(); const objectKey = `quarantine/${context.get('user').id}/${id}/${safeFileName(input.fileName)}`
-  const [attachment] = await db.insert(attachments).values({ id, ownerId: context.get('user').id, objectKey, fileName: safeFileName(input.fileName), mimeType: input.mimeType, kind, byteSize: input.byteSize }).returning()
+  const [attachment] = await db.insert(attachments).values({ id, ownerId: context.get('user').id, objectKey, fileName: safeFileName(input.fileName), mimeType: input.mimeType, kind, byteSize: input.byteSize, metadata: { durationSeconds: input.durationSeconds, waveform: input.waveform } }).returning()
   return context.json({ attachment, uploadUrl: await uploadUrl(objectKey, input.mimeType, input.byteSize), expiresIn: 600 }, 201)
 })
 routes.post('/:id/finalize', async (context) => {
