@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from 'drizzle-orm'
+import { and, desc, eq, ilike, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { type AppVariables, requireAuth } from '../auth/middleware.js'
@@ -47,6 +47,13 @@ routes.patch('/conversations/:conversationId/receipts', async (context) => {
   if (!(await isMember(conversationId, userId))) return context.json({ error: { code: 'NOT_FOUND', message: 'Conversation not found' } }, 404)
   await db.update(conversationMembers).set({ ...(input.deliveredSequence !== undefined ? { lastDeliveredSequence: input.deliveredSequence } : {}), ...(input.readSequence !== undefined ? { lastReadSequence: input.readSequence } : {}) }).where(and(eq(conversationMembers.conversationId, conversationId), eq(conversationMembers.userId, userId)))
   return context.json({ updated: true })
+})
+
+routes.get('/messages/search', async (context) => {
+  const query = z.string().trim().min(2).max(100).parse(context.req.query('q'))
+  const userId = context.get('user').id
+  const rows = await db.select({ message: messages }).from(messages).innerJoin(conversationMembers, and(eq(conversationMembers.conversationId, messages.conversationId), eq(conversationMembers.userId, userId))).where(ilike(messages.body, `%${query.replace(/[%_]/g, '\\$&')}%`)).orderBy(desc(messages.createdAt)).limit(50)
+  return context.json({ messages: rows.map((row) => row.message), nextCursor: null })
 })
 
 export default routes

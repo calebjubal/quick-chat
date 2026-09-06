@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { AlertCircle, ArrowRight, LoaderCircle, MessageCircle, Moon, Search, Sun, Users } from 'lucide-react'
+import { AlertCircle, ArrowRight, LoaderCircle, MessageCircle, Moon, Sun } from 'lucide-react'
 import { clientEnv } from './env'
 import { applyTheme, type ThemePreference } from './theme'
 import './App.css'
+import { ChatWorkspace } from './chat/ChatWorkspace'
 
 type SessionUser = { id: string; displayName: string; username: string }
 type SessionState =
@@ -83,20 +84,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: SessionUser) 
   )
 }
 
-function EmptyWorkspace({ user }: { user: SessionUser }) {
-  return (
-    <div className="workspace">
-      <aside className="workspace-sidebar">
-        <div className="workspace-top"><Brand /><ThemeToggle /></div>
-        <label className="search-field"><Search size={17} /><input placeholder="Search conversations" aria-label="Search conversations" /></label>
-        <div className="empty-list"><Users size={24} /><strong>No conversations yet</strong><p>Find someone by their exact username or use an invite link.</p><button className="secondary-button">Start a conversation</button></div>
-        <div className="current-user"><span className="fallback-avatar">{user.displayName.slice(0, 2).toUpperCase()}</span><span><strong>{user.displayName}</strong><small>@{user.username}</small></span></div>
-      </aside>
-      <main className="empty-chat"><span className="empty-chat-icon"><MessageCircle size={29} /></span><h1>Your messages live here</h1><p>Select a conversation or start a new one. Messages will synchronize automatically when you reconnect.</p><button className="primary-button">New conversation <ArrowRight size={17} /></button></main>
-    </div>
-  )
-}
-
 function App() {
   const [session, setSession] = useState<SessionState>({ status: 'loading' })
 
@@ -116,7 +103,7 @@ function App() {
   if (session.status === 'loading') return <main className="state-page"><Brand /><LoaderCircle className="spinner" size={27} /><p>Loading your conversations…</p></main>
   if (session.status === 'error') return <main className="state-page"><Brand /><span className="error-icon"><AlertCircle size={25} /></span><h1>Connection interrupted</h1><p>{session.message}</p><button className="secondary-button" onClick={() => { setSession({ status: 'loading' }); loadSession() }}>Try again</button></main>
   if (session.status === 'unauthenticated') return <AuthScreen onAuthenticated={(user) => setSession({ status: 'authenticated', user })} />
-  return <EmptyWorkspace user={session.user} />
+  return <ChatWorkspace user={{ ...session.user, username: session.user.username ?? '' }} />
 }
 
 export default App

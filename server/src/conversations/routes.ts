@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, ne } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { type AppVariables, requireAuth } from '../auth/middleware.js'
@@ -17,7 +17,8 @@ async function membership(conversationId: string, userId: string) {
 routes.get('/', async (context) => {
   const userId = context.get('user').id
   const rows = await db.select({ conversation: conversations, membership: conversationMembers }).from(conversationMembers).innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId)).where(eq(conversationMembers.userId, userId)).orderBy(desc(conversations.updatedAt)).limit(50)
-  return context.json({ conversations: rows, nextCursor: null })
+  const enriched = await Promise.all(rows.map(async (row) => ({ ...row, participants: await db.select({ id: users.id, displayName: users.displayName, username: users.username, avatarKey: users.avatarKey }).from(conversationMembers).innerJoin(users, eq(users.id, conversationMembers.userId)).where(and(eq(conversationMembers.conversationId, row.conversation.id), ne(users.id, userId))).limit(4) })))
+  return context.json({ conversations: enriched, nextCursor: null })
 })
 
 routes.post('/direct', async (context) => {
@@ -64,6 +65,14 @@ routes.patch('/:id', async (context) => {
   const input = z.object({ title: z.string().trim().min(1).max(120).optional(), avatarKey: z.string().max(1024).nullable().optional(), disappearingSeconds: z.union([z.literal(86400), z.literal(604800), z.literal(7776000), z.null()]).optional() }).parse(await context.req.json())
   const [conversation] = await db.update(conversations).set({ ...input, updatedAt: new Date() }).where(eq(conversations.id, actor.conversationId)).returning()
   return context.json({ conversation })
+})
+
+routes.patch('/:id/inbox', async (context) => {
+  const actor = await membership(context.req.param('id'), context.get('user').id)
+  if (!actor) return context.json({ error: { code: 'NOT_FOUND', message: 'Conversation not found' } }, 404)
+  const input = z.object({ pinned: z.boolean().optional(), archived: z.boolean().optional(), mutedUntil: z.string().datetime().nullable().optional() }).parse(await context.req.json())
+  await db.update(conversationMembers).set({ ...(input.pinned !== undefined ? { pinnedAt: input.pinned ? new Date() : null } : {}), ...(input.archived !== undefined ? { archivedAt: input.archived ? new Date() : null } : {}), ...(input.mutedUntil !== undefined ? { mutedUntil: input.mutedUntil ? new Date(input.mutedUntil) : null } : {}) }).where(and(eq(conversationMembers.conversationId, actor.conversationId), eq(conversationMembers.userId, actor.userId)))
+  return context.json({ updated: true })
 })
 
 routes.post('/:id/members', async (context) => {
