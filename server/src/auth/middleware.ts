@@ -7,7 +7,7 @@ import { env } from '../env.js'
 import { hashToken } from './security.js'
 
 export type AuthUser = { id: string; email: string; displayName: string; username: string | null; emailVerified: boolean }
-export type AppVariables = { user: AuthUser; sessionId: string }
+export type AppVariables = { user: AuthUser; sessionId: string; requestId: string }
 export const sessionCookieName = env.NODE_ENV === 'production' ? '__Host-quickchat_session' : 'quickchat_session'
 
 export const requireAuth = createMiddleware<{ Variables: AppVariables }>(async (context, next) => {

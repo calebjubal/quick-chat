@@ -11,8 +11,10 @@ import { closeRedis } from './sync/stream.js'
 import { closeDatabase } from './db/client.js'
 import { removePresence, setTyping, touchPresence } from './presence/service.js'
 import { canSendTransientEvent } from './safety/service.js'
+import { shutdownTelemetry } from './ops/instrumentation.js'
+import { logger } from './ops/logger.js'
 
-const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`Quickchat API listening on http://localhost:${env.PORT}`)) as HttpServer
+const server = serve({ fetch: app.fetch, port: env.PORT }, () => logger.info({ port: env.PORT }, 'Quickchat API listening')) as HttpServer
 const sockets = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 })
 
 sockets.on('connection', async (socket, request) => {
@@ -37,7 +39,7 @@ sockets.on('connection', async (socket, request) => {
 })
 
 async function shutdown() {
-  sockets.close(); await Promise.allSettled([closeRedis(), closeDatabase()]); server.close(() => process.exit(0))
+  sockets.close(); await Promise.allSettled([closeRedis(), closeDatabase(), shutdownTelemetry()]); server.close(() => process.exit(0))
   setTimeout(() => process.exit(1), 10000).unref()
 }
 process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown)

@@ -22,6 +22,11 @@ const serverEnvSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default('mailto:ops@quickchat.local'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  SENTRY_DSN: z.string().url().optional(),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  RATE_LIMIT_SALT: z.string().min(16).default('quickchat-development-rate-limit-salt'),
+  GLOBAL_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
 })
 
 export const env = serverEnvSchema.parse(process.env)

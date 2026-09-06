@@ -37,7 +37,7 @@ routes.post('/conversations/:conversationId/messages', async (context) => {
     const [counter] = await tx.update(conversations).set({ nextSequence: sql`${conversations.nextSequence} + 1`, updatedAt: new Date() }).where(eq(conversations.id, conversationId)).returning({ sequence: conversations.nextSequence, disappearingSeconds: conversations.disappearingSeconds })
     const sequence = counter.sequence - 1
     const [message] = await tx.insert(messages).values({ ...input, conversationId, senderId, sequence, expiresAt: counter.disappearingSeconds ? new Date(Date.now() + counter.disappearingSeconds * 1000) : null }).returning()
-    const [outbox] = await tx.insert(eventOutbox).values({ aggregateId: conversationId, type: 'message.created', payload: { message } }).returning()
+    const [outbox] = await tx.insert(eventOutbox).values({ aggregateId: conversationId, type: 'message.created', payload: { message, requestId: context.get('requestId') } }).returning()
     return { message, outboxId: outbox.id }
   })
   publishEvent(conversationId, { type: 'message.created', ...event }).catch(() => undefined)
