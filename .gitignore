@@ -9,6 +9,7 @@ dist/
 .vercel/
 *.log
 *.local
+.local/
 
 # Environment files
 .env
