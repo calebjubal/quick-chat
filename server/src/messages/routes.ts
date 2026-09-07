@@ -34,7 +34,12 @@ routes.post('/conversations/:conversationId/messages', async (context) => {
   if (await directConversationIsBlocked(conversationId)) return context.json({ error: { code: 'MESSAGING_UNAVAILABLE', message: 'Messaging is unavailable for this conversation' } }, 403)
   const input = z.object({ id: z.string().uuid(), body: z.string().trim().min(1).max(MAX_MESSAGE_LENGTH).optional(), attachmentId: z.string().uuid().optional(), replyToId: z.string().uuid().optional(), forwarded: z.boolean().default(false) }).refine((value) => value.body || value.attachmentId, 'A message or attachment is required').parse(await context.req.json())
   const existing = await db.select().from(messages).where(eq(messages.id, input.id)).limit(1)
-  if (existing[0]) return context.json({ message: existing[0], deduplicated: true })
+  if (existing[0]) {
+    if (existing[0].senderId !== senderId || existing[0].conversationId !== conversationId) return context.json({ error: { code: 'ID_CONFLICT', message: 'Message ID is already in use' } }, 409)
+    return context.json({ message: existing[0], deduplicated: true })
+  }
+  const [activeConversation] = await db.select({ id: conversations.id }).from(conversations).where(and(eq(conversations.id, conversationId), isNull(conversations.closedAt))).limit(1)
+  if (!activeConversation) return context.json({ error: { code: 'CHAT_CLOSED', message: 'This chat is closed' } }, 409)
   const actor = context.get('user'); const dailyLimit = messageLimitFor(actor.isGuest)
   const [usage] = await db.select({ count: count() }).from(messages).where(and(eq(messages.senderId, senderId), gte(messages.createdAt, new Date(Date.now() - 86400000))))
   if (usage.count >= dailyLimit) return context.json({ error: { code: 'MESSAGE_LIMIT_REACHED', message: `Daily message limit reached (${dailyLimit})` } }, 429)

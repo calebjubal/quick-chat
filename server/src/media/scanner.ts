@@ -12,13 +12,13 @@ export const matchesDeclaredType = (bytes: Uint8Array, mimeType: string) => {
   if (mimeType === 'image/png') return starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
   if (mimeType === 'image/gif') return new TextDecoder().decode(bytes.slice(0, 6)).match(/^GIF8[79]a$/) !== null
   if (mimeType === 'image/webp') return new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF' && new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP'
-  if (mimeType === 'video/mp4') return new TextDecoder().decode(bytes.slice(4, 8)) === 'ftyp'
+  if (mimeType === 'video/mp4' || mimeType === 'audio/mp4') return new TextDecoder().decode(bytes.slice(4, 8)) === 'ftyp'
   if (mimeType === 'video/webm' || mimeType === 'audio/webm') return starts(0x1a, 0x45, 0xdf, 0xa3)
   if (mimeType === 'audio/ogg') return new TextDecoder().decode(bytes.slice(0, 4)) === 'OggS'
   if (mimeType === 'audio/mpeg') return new TextDecoder().decode(bytes.slice(0, 3)) === 'ID3' || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)
   if (mimeType === 'application/pdf') return new TextDecoder().decode(bytes.slice(0, 5)) === '%PDF-'
   if (mimeType.startsWith('application/vnd.openxmlformats-officedocument')) return starts(0x50, 0x4b, 0x03, 0x04)
-  if (mimeType === 'text/plain') return !bytes.slice(0, 8192).includes(0)
+  if (mimeType === 'text/plain' || mimeType === 'text/csv') return !bytes.slice(0, 8192).includes(0)
   return false
 }
 

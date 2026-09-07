@@ -20,23 +20,25 @@ async function membership(conversationId: string, userId: string) {
 
 routes.get('/', async (context) => {
   const userId = context.get('user').id
-  const rows = await db.select({ conversation: conversations, membership: conversationMembers }).from(conversationMembers).innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId)).where(eq(conversationMembers.userId, userId)).orderBy(desc(conversations.updatedAt)).limit(50)
+  const rows = await db.select({ conversation: conversations, membership: conversationMembers }).from(conversationMembers).innerJoin(conversations, eq(conversations.id, conversationMembers.conversationId)).where(and(eq(conversationMembers.userId, userId), isNull(conversations.closedAt))).orderBy(desc(conversations.updatedAt)).limit(50)
   const enriched = await Promise.all(rows.map(async (row) => ({ ...row, direction: row.conversation.createdBy === userId ? 'created' as const : 'sent' as const, participants: await db.select({ id: users.id, displayName: sql<string>`coalesce(${conversationMembers.nickname}, ${users.displayName})`, username: users.username, avatarKey: users.avatarKey }).from(conversationMembers).innerJoin(users, eq(users.id, conversationMembers.userId)).where(and(eq(conversationMembers.conversationId, row.conversation.id), ne(users.id, userId))).limit(4) })))
   return context.json({ conversations: enriched, nextCursor: null })
 })
 
 routes.post('/shared', async (context) => {
   const input = z.object({ title: z.string().trim().min(1).max(120).optional() }).parse(await context.req.json()); const actor = context.get('user')
-  const [total] = await db.select({ count: count() }).from(conversations).where(and(eq(conversations.createdBy, actor.id), eq(conversations.type, 'shared'), isNull(conversations.closedAt)))
-  if (total.count >= CREATED_CHAT_LIMIT) return context.json({ error: { code: 'CHAT_LIMIT_REACHED', message: `You can have up to ${CREATED_CHAT_LIMIT} created chats. Close one before creating another.` } }, 409)
   const token = createToken()
-  const conversation = await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, actor.id)).for('update')
+    const [total] = await tx.select({ count: count() }).from(conversations).where(and(eq(conversations.createdBy, actor.id), eq(conversations.type, 'shared'), isNull(conversations.closedAt)))
+    if (total.count >= CREATED_CHAT_LIMIT) return null
     const [created] = await tx.insert(conversations).values({ type: 'shared', title: input.title ?? `${actor.displayName}'s chat`, createdBy: actor.id }).returning()
     await tx.insert(conversationMembers).values({ conversationId: created.id, userId: actor.id, role: 'owner', nickname: actor.displayName })
     await tx.insert(invites).values({ createdBy: actor.id, conversationId: created.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 7 * 86400000) })
-    return created
+    return { conversation: created, createdCount: total.count + 1 }
   })
-  return context.json({ conversation, shareUrl: `${env.APP_URL}/?join=${encodeURIComponent(token)}`, createdCount: total.count + 1, createdLimit: CREATED_CHAT_LIMIT }, 201)
+  if (!result) return context.json({ error: { code: 'CHAT_LIMIT_REACHED', message: `You can have up to ${CREATED_CHAT_LIMIT} created chats. Close one before creating another.` } }, 409)
+  return context.json({ ...result, shareUrl: `${env.APP_URL}/?join=${encodeURIComponent(token)}`, createdLimit: CREATED_CHAT_LIMIT }, 201)
 })
 
 routes.post('/shared/:token/join', async (context) => {

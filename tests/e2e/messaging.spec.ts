@@ -49,8 +49,8 @@ test.describe.serial('complete messaging journeys', () => {
 
   test('cached shell remains available while offline', async ({ browser }) => {
     const context = await browser.newContext(); await signIn(context, accountA)
-    const page = await context.newPage(); await page.goto('/'); await expect(page.getByText('Messages', { exact: true })).toBeVisible()
-    await context.setOffline(true); await page.reload(); await expect(page.locator('body')).toContainText(/Messages|Loading your conversations/)
+    const page = await context.newPage(); await page.goto('/'); await expect(page.getByText('Chats', { exact: true })).toBeVisible()
+    await context.setOffline(true); await page.reload(); await expect(page.locator('body')).toContainText(/Chats|Loading your conversations/)
     await context.close()
   })
 })

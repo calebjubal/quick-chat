@@ -7,8 +7,11 @@ export class VoiceRecorder {
   private chunks: Blob[] = []
   async start() {
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false })
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
-    this.recorder = new MediaRecorder(this.stream, { mimeType }); this.chunks = []
+    const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'].find((type) => MediaRecorder.isTypeSupported(type))
+    if (!mimeType) { this.stream.getTracks().forEach((track) => track.stop()); throw new Error('Voice recording is not supported by this browser') }
+    try { this.recorder = new MediaRecorder(this.stream, { mimeType }) }
+    catch (error) { this.stream.getTracks().forEach((track) => track.stop()); throw error }
+    this.chunks = []
     this.recorder.ondataavailable = (event) => { if (event.data.size) this.chunks.push(event.data) }
     this.recorder.start(250)
   }

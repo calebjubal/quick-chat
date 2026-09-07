@@ -19,7 +19,7 @@ routes.post('/', async (context) => {
   if (!kind) return context.json({ error: { code: 'UNSUPPORTED_MEDIA', message: 'This file type is not supported' } }, 415)
   if (input.voice && !input.durationSeconds) return context.json({ error: { code: 'INVALID_VOICE_NOTE', message: 'Voice notes require a duration' } }, 422)
   const actor = context.get('user')
-  if (actor.isGuest && !input.voice) return context.json({ error: { code: 'ACCOUNT_REQUIRED', message: 'Create an account to send files' } }, 403)
+  if (actor.isGuest && kind !== 'voice') return context.json({ error: { code: 'ACCOUNT_REQUIRED', message: 'Create an account to send files' } }, 403)
   const dailyLimit = uploadLimitFor(actor.isGuest)
   const [usage] = await db.select({ count: count() }).from(attachments).where(and(eq(attachments.ownerId, actor.id), gte(attachments.createdAt, new Date(Date.now() - 86400000))))
   if (usage.count >= dailyLimit) return context.json({ error: { code: 'UPLOAD_LIMIT_REACHED', message: `Daily upload limit reached (${dailyLimit})` } }, 429)
