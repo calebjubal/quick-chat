@@ -32,7 +32,7 @@ export const observeRequests = createMiddleware<{ Variables: AppVariables }>(asy
 export const protectOrigin = createMiddleware(async (context, next) => {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(context.req.method)) {
     const origin = context.req.header('origin')
-    if (origin && !env.ALLOWED_ORIGINS.split(',').includes(origin)) return context.json({ error: { code: 'INVALID_ORIGIN', message: 'Request origin is not allowed' } }, 403)
+    if (!origin || !env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()).includes(origin)) return context.json({ error: { code: 'INVALID_ORIGIN', message: 'Request origin is not allowed' } }, 403)
   }
   await next()
 })

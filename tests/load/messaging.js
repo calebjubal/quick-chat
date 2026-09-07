@@ -21,10 +21,10 @@ export const options = {
 }
 
 const uuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => { const random = Math.random() * 16 | 0; return (character === 'x' ? random : random & 0x3 | 0x8).toString(16) })
-const headers = { 'Content-Type': 'application/json', Cookie: `${cookieName}=${token}` }
+const headers = { 'Content-Type': 'application/json', Origin: __ENV.K6_ORIGIN || 'http://127.0.0.1:5173', Cookie: `${cookieName}=${token}` }
 
 export function socketSession() {
-  ws.connect(wsUrl, { headers: { Cookie: `${cookieName}=${token}` } }, (socket) => {
+  ws.connect(wsUrl, { headers }, (socket) => {
     socket.on('open', () => socket.send(JSON.stringify({ type: 'sync.resume', requestId: uuid(), cursor: null })))
     socket.setInterval(() => socket.send(JSON.stringify({ type: 'ping', requestId: uuid(), sentAt: Date.now() })), 25_000)
     socket.setTimeout(() => socket.close(), 115_000)
@@ -39,5 +39,5 @@ export function sendMessage() {
 }
 
 export function fanoutMember() {
-  ws.connect(wsUrl, { headers: { Cookie: `${cookieName}=${token}` }, tags: { scenario: '256-member-fanout' } }, (socket) => socket.setTimeout(() => socket.close(), 60_000))
+  ws.connect(wsUrl, { headers, tags: { scenario: '256-member-fanout' } }, (socket) => socket.setTimeout(() => socket.close(), 60_000))
 }

@@ -21,11 +21,12 @@ import type { AppVariables } from './auth/middleware.js'
 import { db } from './db/client.js'
 import { sql } from 'drizzle-orm'
 import { getRedis } from './sync/stream.js'
+import { HTTPException } from 'hono/http-exception'
 
 export const app = new Hono<{ Variables: AppVariables }>()
 app.use('*', observeRequests)
 app.use('*', secureHeaders({ contentSecurityPolicy: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] }, strictTransportSecurity: env.NODE_ENV === 'production' ? 'max-age=63072000; includeSubDomains; preload' : false }))
-app.use('*', cors({ origin: env.ALLOWED_ORIGINS.split(','), credentials: true, allowHeaders: ['Content-Type', 'X-Request-Id'], exposeHeaders: ['X-Request-Id', 'RateLimit-Limit', 'RateLimit-Remaining'] }))
+app.use('*', cors({ origin: env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()), credentials: true, allowHeaders: ['Content-Type', 'X-Request-Id'], exposeHeaders: ['X-Request-Id', 'RateLimit-Limit', 'RateLimit-Remaining'] }))
 app.use('/api/*', protectOrigin)
 app.use('/api/*', bodyLimit({ maxSize: 1024 * 1024, onError: (context) => context.json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request payload is too large' } }, 413) }))
 app.use('/api/*', rateLimit())
@@ -50,6 +51,7 @@ app.route('/api/v1/push-subscriptions', notificationRoutes)
 app.route('/api/v1', safetyRoutes)
 app.route('/api/v1', settingsRoutes)
 app.onError((error, context) => {
+  if (error instanceof HTTPException) return context.json({ error: { code: 'SERVICE_UNAVAILABLE', message: error.message } }, error.status)
   if (error instanceof ZodError) return context.json({ error: { code: 'INVALID_REQUEST', message: 'Request validation failed', requestId: context.get('requestId') } }, 422)
   captureException(error, context.get('requestId')); logger.error({ requestId: context.get('requestId'), error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : 'Unknown error' }, 'request failed')
   return context.json({ error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', requestId: context.get('requestId') } }, 500)

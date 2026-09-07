@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword } from '../auth/security.js'
 import { db } from '../db/client.js'
 import { credentials, eventOutbox, sessions, users } from '../db/schema.js'
 import { accountDeletionDate, describeDevice } from './service.js'
+import { cookieOptions } from '../auth/cookies.js'
 
 const routes = new Hono<{ Variables: AppVariables }>()
 routes.use('*', requireAuth)
@@ -30,7 +31,7 @@ routes.delete('/sessions/:id', async (context) => {
   const sessionId = z.string().uuid().parse(context.req.param('id'))
   const [revoked] = await db.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.id, sessionId), eq(sessions.userId, context.get('user').id))).returning({ id: sessions.id })
   if (!revoked) return context.json({ error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404)
-  if (sessionId === context.get('sessionId')) deleteCookie(context, sessionCookieName, { path: '/' })
+  if (sessionId === context.get('sessionId')) deleteCookie(context, sessionCookieName, cookieOptions)
   return context.body(null, 204)
 })
 
@@ -58,7 +59,7 @@ routes.delete('/account', async (context) => {
   if (!credential || !(await verifyPassword(credential.passwordHash, input.password))) return context.json({ error: { code: 'INVALID_PASSWORD', message: 'Password is incorrect' } }, 403)
   const deletionScheduledAt = accountDeletionDate()
   await db.transaction(async (tx) => { await tx.update(users).set({ deletionScheduledAt, updatedAt: new Date() }).where(eq(users.id, userId)); await tx.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt))) })
-  deleteCookie(context, sessionCookieName, { path: '/' })
+  deleteCookie(context, sessionCookieName, cookieOptions)
   return context.json({ deletionScheduledAt })
 })
 

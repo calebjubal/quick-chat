@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { AlertCircle, ArrowRight, LoaderCircle, Moon, Sun, Zap } from 'lucide-react'
 import { clientEnv } from './env'
 import { applyTheme, type ThemePreference } from './theme'
@@ -10,7 +10,7 @@ import { clearLocalAccountData } from './offline/database'
 
 export type SessionUser = { id: string; displayName: string; username: string | null; isGuest: boolean }
 type SessionState = { status: 'loading' } | { status: 'unauthenticated' } | { status: 'authenticated'; user: SessionUser } | { status: 'error'; message: string }
-type AuthMode = 'login' | 'register' | 'forgot' | 'guest' | 'reset' | 'verify'
+type AuthMode = 'login' | 'register' | 'forgot' | 'guest' | 'reset' | 'verify' | 'resend'
 
 function Brand() {
   return <span className="brand" aria-label="Quickchat"><span className="brand-icon"><Zap size={20} /></span><strong>Quickchat</strong></span>
@@ -37,13 +37,16 @@ const authRequest = async <T,>(endpoint: string, body: Record<string, unknown>) 
   return data as T
 }
 
-function AuthScreen({ onAuthenticated, joinToken, initialMode = 'login' }: { onAuthenticated: (user: SessionUser, joined?: boolean) => void; joinToken?: string; initialMode?: AuthMode }) {
+export function AuthScreen({ onAuthenticated, joinToken, initialMode = 'login' }: { onAuthenticated: (user: SessionUser, joined?: boolean) => void; joinToken?: string; initialMode?: AuthMode }) {
   const pageMode: AuthMode = location.pathname === '/reset-password' ? 'reset' : location.pathname === '/verify' ? 'verify' : joinToken ? 'guest' : initialMode
-  const [mode, setMode] = useState<AuthMode>(pageMode); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(pageMode === 'verify')
   const token = new URLSearchParams(location.search).get('token') ?? ''
+  const [mode, setMode] = useState<AuthMode>(pageMode); const [message, setMessage] = useState(pageMode === 'verify' && !token ? 'Verification link is missing a token. Request a new link.' : ''); const [busy, setBusy] = useState(pageMode === 'verify' && Boolean(token))
+  const verificationStarted = useRef(false)
 
   useEffect(() => {
-    if (mode !== 'verify' || !token) return
+    if (mode !== 'verify' || verificationStarted.current) return
+    verificationStarted.current = true
+    if (!token) return
     void authRequest<{ verified: true }>('verify', { token }).then(() => { setMessage('Email verified. You can sign in now.'); setMode('login'); history.replaceState({}, '', '/') }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'Verification failed')).finally(() => setBusy(false))
   }, [mode, token])
 
@@ -58,7 +61,7 @@ function AuthScreen({ onAuthenticated, joinToken, initialMode = 'login' }: { onA
         onAuthenticated(data.user, Boolean(joinToken)); return
       }
       if (mode === 'verify') return
-      const endpoint = mode === 'login' ? 'login' : mode === 'register' ? 'register' : mode === 'forgot' ? 'password/request' : 'password/reset'
+      const endpoint = mode === 'login' ? 'login' : mode === 'register' ? 'register' : mode === 'forgot' ? 'password/request' : mode === 'resend' ? 'verification/resend' : 'password/reset'
       const data = await authRequest<{ user?: SessionUser }>(endpoint, mode === 'reset' ? { token, password: body.password } : body)
       if (data.user) onAuthenticated(data.user)
       else if (mode === 'register') setMessage('Check your email to verify your account. Your profile will be ready after verification.')
@@ -72,6 +75,7 @@ function AuthScreen({ onAuthenticated, joinToken, initialMode = 'login' }: { onA
     login: ['Welcome back', 'Sign in for files, video calls, and higher limits.'], register: ['Create your account', 'Keep your chats and unlock files and video calls.'],
     forgot: ['Reset your password', 'We will email you a secure reset link.'], guest: [joinToken ? 'Join this chat' : 'Enter Quickchat', joinToken ? 'Choose the name people in this chat will see.' : 'Pick a name and start chatting—no account needed.'],
     reset: ['Choose a new password', 'Use at least 12 characters.'], verify: ['Verifying your email', 'This will only take a moment.'],
+    resend: ['Resend verification email', 'Request a fresh link if your email did not arrive or the link expired.'],
   }
   const [heading, subheading] = headings[mode]
   return <main className="auth-page">
@@ -80,12 +84,13 @@ function AuthScreen({ onAuthenticated, joinToken, initialMode = 'login' }: { onA
       <div className="auth-card"><div className="auth-card-heading"><span className="mobile-brand"><Brand /></span><h2>{heading}</h2><p>{subheading}</p></div>
         <form aria-label={heading} onSubmit={submit}>
           {(mode === 'register' || mode === 'guest') && <label>Your name<input name="displayName" autoComplete="name" placeholder="How people should see you" required autoFocus /></label>}
-          {(mode === 'login' || mode === 'register' || mode === 'forgot') && <label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></label>}
+          {(mode === 'login' || mode === 'register' || mode === 'forgot' || mode === 'resend') && <label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></label>}
           {(mode === 'login' || mode === 'register' || mode === 'reset') && <label>Password<span className="label-row"><span />{mode === 'login' && <button type="button" onClick={() => changeMode('forgot')}>Forgot password?</button>}</span><input name="password" type="password" minLength={12} maxLength={128} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="At least 12 characters" required /></label>}
           {message && <p className="form-message" role="status">{message}</p>}
-          {mode !== 'verify' && <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : mode === 'guest' ? joinToken ? 'Join chat' : 'Continue as guest' : mode === 'forgot' ? 'Send reset link' : 'Update password'} {!busy && <ArrowRight size={17} />}</button>}
+          {mode !== 'verify' && <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : mode === 'guest' ? joinToken ? 'Join chat' : 'Continue as guest' : mode === 'forgot' ? 'Send reset link' : mode === 'resend' ? 'Send verification link' : 'Update password'} {!busy && <ArrowRight size={17} />}</button>}
           {mode === 'verify' && busy && <LoaderCircle className="spinner" />}
         </form>
+        {(mode === 'login' || mode === 'register' || mode === 'verify') && <button className="secondary-button" type="button" disabled={busy} onClick={() => changeMode('resend')}>Resend verification email</button>}
         <div className="auth-footer">{mode === 'login' ? <><button type="button" onClick={() => changeMode('guest')}>Continue without an account</button><span className="auth-divider">or</span><button type="button" onClick={() => changeMode('register')}>Create an account</button></> : <button type="button" onClick={() => changeMode('login')}>Sign in instead</button>}</div>
       </div>
     </section>

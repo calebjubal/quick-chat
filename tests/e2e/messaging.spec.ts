@@ -7,6 +7,7 @@ const apiBase = (process.env.E2E_API_URL ?? process.env.E2E_BASE_URL ?? 'http://
 const api = (path: string) => `${apiBase}/api/v1${path}`
 
 async function signIn(context: BrowserContext, account: typeof accountA) {
+  await context.setExtraHTTPHeaders({ Origin: new URL(process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173').origin })
   const response = await context.request.post(api('/auth/login'), { data: { email: account.email, password: account.password } })
   expect(response.ok()).toBeTruthy()
   return (await response.json()).user as { id: string }

@@ -17,6 +17,7 @@ export const requireAuth = createMiddleware<{ Variables: AppVariables }>(async (
     .from(sessions).innerJoin(users, eq(users.id, sessions.userId))
     .where(and(eq(sessions.tokenHash, hashToken(raw)), gt(sessions.expiresAt, new Date()), isNull(sessions.revokedAt), isNull(users.deletionScheduledAt))).limit(1)
   if (!record) return context.json({ error: { code: 'UNAUTHENTICATED', message: 'Session expired' } }, 401)
+  if (record.accountKind !== 'guest' && !record.verifiedAt) return context.json({ error: { code: 'EMAIL_UNVERIFIED', message: 'Verify your email before signing in' } }, 403)
   context.set('user', { id: record.userId, email: record.email, displayName: record.displayName, username: record.username, emailVerified: Boolean(record.verifiedAt), isGuest: record.accountKind === 'guest' })
   context.set('sessionId', record.sessionId)
   await next()

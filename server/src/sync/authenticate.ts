@@ -7,7 +7,7 @@ import { hashToken } from '../auth/security.js'
 import { env } from '../env.js'
 
 export async function authenticateUpgrade(request: IncomingMessage) {
-  if (!request.headers.origin || !env.ALLOWED_ORIGINS.split(',').includes(request.headers.origin)) return null
+  if (!request.headers.origin || !env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()).includes(request.headers.origin)) return null
   const cookies = Object.fromEntries((request.headers.cookie ?? '').split(';').map((part) => part.trim().split('=').map(decodeURIComponent)).filter((parts) => parts.length === 2) as [string, string][])
   const token = cookies[sessionCookieName]
   if (!token) return null
