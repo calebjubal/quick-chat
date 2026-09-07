@@ -7,18 +7,21 @@ export class RealtimeClient extends EventTarget {
   private socket?: WebSocket
   private attempt = 0
   private stopped = false
+  private retryTimer?: number
 
   connect() {
     this.stopped = false
     this.socket = new WebSocket(clientEnv.VITE_WS_URL)
     this.socket.onopen = () => { this.attempt = 0; this.dispatchEvent(new Event('connected')) }
     this.socket.onmessage = (event) => {
-      const parsed = websocketEnvelopeSchema.safeParse(JSON.parse(String(event.data)))
-      if (parsed.success) this.dispatchEvent(new CustomEvent<WebsocketEnvelope>('event', { detail: parsed.data }))
+      try {
+        const parsed = websocketEnvelopeSchema.safeParse(JSON.parse(String(event.data)))
+        if (parsed.success) this.dispatchEvent(new CustomEvent<WebsocketEnvelope>('event', { detail: parsed.data }))
+      } catch { /* Discard malformed transport frames. */ }
     }
     this.socket.onclose = () => {
       this.dispatchEvent(new Event('disconnected'))
-      if (!this.stopped) window.setTimeout(() => this.connect(), retryDelay(this.attempt++))
+      if (!this.stopped) this.retryTimer = window.setTimeout(() => { if (!this.stopped) this.connect() }, retryDelay(this.attempt++))
     }
   }
 
@@ -27,5 +30,5 @@ export class RealtimeClient extends EventTarget {
     this.socket.send(JSON.stringify(event)); return true
   }
 
-  close() { this.stopped = true; this.socket?.close() }
+  close() { this.stopped = true; window.clearTimeout(this.retryTimer); this.socket?.close() }
 }

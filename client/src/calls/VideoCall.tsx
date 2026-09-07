@@ -47,7 +47,7 @@ export function VideoCall({ conversationId, title }: { conversationId: string; t
       const envelope = (event as CustomEvent<WebsocketEnvelope>).detail; if (envelope.conversationId !== conversationId || !envelope.type.startsWith('call.')) return
       const signal = envelope.payload as CallSignal
       if (signal.kind === 'offer' && stateRef.current === 'idle') { pendingOffer.current = signal; callId.current = signal.callId; setState('incoming'); setMessage(`${title} is calling`) }
-      else if (signal.kind === 'answer' && signal.callId === callId.current && peer.current) { await peer.current.setRemoteDescription(signal.description) }
+      else if (signal.kind === 'answer' && signal.callId === callId.current && peer.current) { await peer.current.setRemoteDescription(signal.description); for (const candidate of pendingIce.current) await peer.current.addIceCandidate(candidate); pendingIce.current = [] }
       else if (signal.kind === 'ice' && signal.callId === callId.current) { if (peer.current?.remoteDescription) await peer.current.addIceCandidate(signal.candidate).catch(() => undefined); else pendingIce.current.push(signal.candidate) }
       else if (signal.kind === 'end' && signal.callId === callId.current) endRef.current(false)
     }
