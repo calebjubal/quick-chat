@@ -1,5 +1,5 @@
 import { clientSocketEventSchema } from '@quickchat/contracts'
-import { serve } from '@hono/node-server'
+import { createAdaptorServer } from '@hono/node-server'
 import type { Server as HttpServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { WebSocket, WebSocketServer } from 'ws'
@@ -19,7 +19,8 @@ import { conversationMembers } from './db/schema.js'
 import { eq } from 'drizzle-orm'
 import { liveEventEnvelope } from './sync/envelope.js'
 
-const server = serve({ fetch: app.fetch, port: env.PORT }, () => logger.info({ port: env.PORT }, 'Quickchat API listening')) as HttpServer
+const server = createAdaptorServer({ fetch: app.fetch }) as HttpServer
+if (!process.env.VERCEL) server.listen(env.PORT, () => logger.info({ port: env.PORT }, 'Quickchat API listening'))
 const sockets = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 })
 const userSockets = new Map<string, Set<WebSocket>>()
 const instanceId = randomUUID()
@@ -68,3 +69,4 @@ async function shutdown() {
 process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown)
 
 export { app }
+export default server

@@ -46,6 +46,8 @@ Deploy client/ to Vercel as a static Vite application:
 
 ### Backend deployment
 
+For the existing Vercel **server** project, follow [server environment variables and deployment setup](docs/vercel-server.md). Set Root Directory to `server`; the API has an explicit Node function entrypoint. A separate worker is still required.
+
 Keep server/ as a long-running Node.js application:
 
 - Hono handles REST endpoints.
