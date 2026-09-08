@@ -37,7 +37,7 @@ export const apiRequest = async <T = any>(path: string, init?: RequestInit): Pro
 export const useChatStore = create<ChatStore>((set, get) => ({
   conversations: [], messages: {}, loading: false,
   async loadConversations() {
-    set({ loading: true, error: undefined })
+    set({ loading: !get().conversations.length })
     try {
       const data = await apiRequest<{ conversations: ConversationEntry[] }>('/conversations')
       set({ conversations: data.conversations, loading: false })
@@ -45,8 +45,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       const current = get().selectedId
       if (current && !data.conversations.some((entry) => entry.conversation.id === current)) set({ selectedId: undefined })
     } catch (error) {
+      if (error instanceof ApiError && [401, 403].includes(error.status)) {
+        await localDb.transaction('rw', localDb.tables, () => Promise.all(localDb.tables.map((table) => table.clear())))
+        set({ conversations: [], messages: {}, selectedId: undefined, loading: false, error: error.message })
+        return
+      }
       const cached = await localDb.conversations.toArray()
-      set({ conversations: cached, loading: false, error: cached.length ? undefined : error instanceof Error ? error.message : 'Unable to load conversations' })
+      set({ conversations: cached, loading: false, error: error instanceof Error ? error.message : 'Unable to load conversations' })
     }
   },
   async select(id, refresh = false) {
@@ -70,15 +75,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set((state) => ({ messages: { ...state.messages, [id]: [...(state.messages[id] ?? []), optimistic] } }))
     try {
       const data = await apiRequest<{ message: ChatMessage }>(`/conversations/${id}/messages`, { method: 'POST', body: JSON.stringify({ id: messageId, body: body || undefined, attachmentId: input.attachmentId }) })
-      set((state) => ({ messages: { ...state.messages, [id]: state.messages[id].map((message) => message.id === messageId ? data.message : message) } }))
+      set((state) => ({ messages: { ...state.messages, [id]: [...state.messages[id].filter((message) => message.id !== messageId), data.message].sort((a, b) => a.sequence - b.sequence) } }))
       await localDb.messages.put(data.message)
       return data.message
     } catch (error) {
       if (input.attachmentId || error instanceof ApiError) set((state) => ({ messages: { ...state.messages, [id]: state.messages[id].filter((message) => message.id !== messageId) }, error: error instanceof Error ? error.message : 'Unable to send attachment' }))
-      else {
-        await localDb.outbox.put({ id: messageId, kind: 'message.send', conversationId: id, payload: { id: messageId, body }, createdAt: new Date().toISOString(), attempts: 0 })
-        await localDb.messages.put(optimistic)
-      }
+      else set((state) => ({ messages: { ...state.messages, [id]: state.messages[id].filter((message) => message.id !== messageId) } }))
       if (error instanceof Error) set({ error: error.message })
       return undefined
     }

@@ -107,7 +107,7 @@ routes.get('/:id', async (context) => {
 routes.patch('/:id', async (context) => {
   const actor = await membership(context.req.param('id'), context.get('user').id)
   if (!actor || !['owner', 'admin'].includes(actor.role)) return context.json({ error: { code: 'FORBIDDEN', message: 'Admin access required' } }, 403)
-  const input = z.object({ title: z.string().trim().min(1).max(120).optional(), avatarKey: z.string().max(1024).nullable().optional(), disappearingSeconds: z.union([z.literal(86400), z.literal(604800), z.literal(7776000), z.null()]).optional() }).parse(await context.req.json())
+  const input = z.object({ title: z.string().trim().min(1).max(120).optional() }).strict().parse(await context.req.json())
   const [conversation] = await db.update(conversations).set({ ...input, updatedAt: new Date() }).where(eq(conversations.id, actor.conversationId)).returning()
   return context.json({ conversation })
 })

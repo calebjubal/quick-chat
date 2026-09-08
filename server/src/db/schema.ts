@@ -8,6 +8,12 @@ const timestamps = {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }
 
+export const requestLimits = pgTable('request_limits', {
+  key: text('key').primaryKey(),
+  count: integer('count').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, (table) => [index('request_limits_expiry_idx').on(table.expiresAt)])
+
 export const conversationType = pgEnum('conversation_type', ['direct', 'group', 'shared'])
 export const accountKind = pgEnum('account_kind', ['registered', 'guest'])
 export const memberRole = pgEnum('member_role', ['owner', 'admin', 'member'])

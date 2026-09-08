@@ -3,13 +3,12 @@ import { metrics, SpanStatusCode, trace } from '@opentelemetry/api'
 import { createMiddleware } from 'hono/factory'
 import { type AppVariables } from '../auth/middleware.js'
 import { env } from '../env.js'
-import { getRedis } from '../sync/stream.js'
+import { consumeRateLimit } from './rate-limit.js'
 import { captureException } from './instrumentation.js'
 import { logger } from './logger.js'
 
 const requestCounter = metrics.getMeter('quickchat-api').createCounter('http.server.requests')
 const requestDuration = metrics.getMeter('quickchat-api').createHistogram('http.server.duration', { unit: 'ms' })
-const fallbackCounters = new Map<string, { count: number; expiresAt: number }>()
 
 export const safeRequestId = (value?: string) => value && /^[a-zA-Z0-9_-]{8,80}$/.test(value) ? value : randomUUID()
 export const rateLimitKey = (address: string, bucket: number) => createHash('sha256').update(`${env.RATE_LIMIT_SALT}:${address}:${bucket}`).digest('hex')
@@ -40,11 +39,8 @@ export const protectOrigin = createMiddleware(async (context, next) => {
 export const rateLimit = (limit = env.GLOBAL_RATE_LIMIT_PER_MINUTE, namespace = 'global') => createMiddleware(async (context, next) => {
   const bucket = Math.floor(Date.now() / 60000); const key = `rate:${namespace}:${rateLimitKey(clientAddress(context.req.raw.headers), bucket)}`
   let count: number
-  try { count = await getRedis().incr(key); if (count === 1) await getRedis().expire(key, 61) }
-  catch {
-    const now = Date.now(); const current = fallbackCounters.get(key); count = current && current.expiresAt > now ? current.count + 1 : 1; fallbackCounters.set(key, { count, expiresAt: now + 61000 })
-    if (fallbackCounters.size > 10_000) for (const [entryKey, entry] of fallbackCounters) if (entry.expiresAt <= now) fallbackCounters.delete(entryKey)
-  }
+  try { count = await consumeRateLimit(key) }
+  catch { return context.json({ error: { code: 'SERVICE_UNAVAILABLE', message: 'Please try again shortly' } }, 503) }
   context.header('ratelimit-limit', String(limit)); context.header('ratelimit-remaining', String(Math.max(0, limit - count)))
   if (count > limit) { context.header('retry-after', '60'); return context.json({ error: { code: 'RATE_LIMITED', message: 'Too many requests. Try again shortly.' } }, 429) }
   await next()

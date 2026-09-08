@@ -72,7 +72,7 @@ export function AuthScreen({ onAuthenticated, joinToken, initialMode = 'login' }
   }
 
   const headings: Record<AuthMode, [string, string]> = {
-    login: ['Welcome back', 'Sign in for files, video calls, and higher limits.'], register: ['Create your account', 'Keep your chats and unlock files and video calls.'],
+    login: ['Welcome back', 'Sign in to keep your chats and get higher message limits.'], register: ['Create your account', 'Keep your chats and get higher message limits.'],
     forgot: ['Reset your password', 'We will email you a secure reset link.'], guest: [joinToken ? 'Join this chat' : 'Enter Quickchat', joinToken ? 'Choose the name people in this chat will see.' : 'Pick a name and start chatting—no account needed.'],
     reset: ['Choose a new password', 'Use at least 12 characters.'], verify: ['Verifying your email', 'This will only take a moment.'],
     resend: ['Resend verification email', 'Request a fresh link if your email did not arrive or the link expired.'],
@@ -80,7 +80,7 @@ export function AuthScreen({ onAuthenticated, joinToken, initialMode = 'login' }
   const [heading, subheading] = headings[mode]
   return <main className="auth-page">
     <div className="auth-glow" /><header className="public-header"><Brand /><ThemeToggle /></header>
-    <section className="auth-layout"><div className="auth-intro"><span className="eyebrow">Fast conversations, zero setup</span><h1>Share a chat.<br />Talk instantly.</h1><p>Create a private chat link, send it to anyone, and start talking as soon as they choose a name.</p><div className="trust-row"><span><span className="status-dot" /> Live delivery</span><span>Voice notes for guests</span><span>No public directory</span></div></div>
+    <section className="auth-layout"><div className="auth-intro"><span className="eyebrow">Fast conversations, zero setup</span><h1>Share a chat.<br />Talk instantly.</h1><p>Create a private chat link, send it to anyone, and start talking as soon as they choose a name.</p><div className="trust-row"><span><span className="status-dot" /> Automatic updates</span><span>Guest access</span><span>No public directory</span></div></div>
       <div className="auth-card"><div className="auth-card-heading"><span className="mobile-brand"><Brand /></span><h2>{heading}</h2><p>{subheading}</p></div>
         <form aria-label={heading} onSubmit={submit}>
           {(mode === 'register' || mode === 'guest') && <label>Your name<input name="displayName" autoComplete="name" placeholder="How people should see you" required autoFocus /></label>}

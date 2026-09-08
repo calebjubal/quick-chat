@@ -1,12 +1,11 @@
 import { z } from 'zod'
 
-const serverEnvSchema = z.object({
+export const serverEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(3000),
+  PORT: z.coerce.number().int().positive().default(3001),
   ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://127.0.0.1:5173'),
   DATABASE_URL: z.string().url().default('postgres://quickchat:quickchat@localhost:5432/quickchat'),
   DATABASE_URL_UNPOOLED: z.string().url().optional(),
-  REDIS_URL: z.string().url().default('redis://localhost:6379'),
   APP_URL: z.string().url().default('http://localhost:5173'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   SMTP_HOST: z.string().optional(),
@@ -14,35 +13,19 @@ const serverEnvSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('Quickchat <no-reply@quickchat.local>'),
-  S3_REGION: z.string().default('ap-south-1'),
-  S3_BUCKET: z.string().default('quickchat-media'),
-  S3_ENDPOINT: z.string().url().optional(),
-  S3_ACCESS_KEY_ID: z.string().optional(),
-  S3_SECRET_ACCESS_KEY: z.string().optional(),
-  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(26214400),
-  VAPID_PUBLIC_KEY: z.string().optional(),
-  VAPID_PRIVATE_KEY: z.string().optional(),
-  VAPID_SUBJECT: z.string().default('mailto:ops@quickchat.local'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   SENTRY_DSN: z.string().url().optional(),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   RATE_LIMIT_SALT: z.string().min(16).default('quickchat-development-rate-limit-salt'),
   GLOBAL_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
   COOKIE_SAME_SITE: z.enum(['Lax', 'Strict', 'None']).default('Lax'),
-  WORKER_INTERVAL_MS: z.coerce.number().int().min(1000).default(5000),
-  CLAMAV_HOST: z.string().default('localhost'),
-  CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
   GUEST_MESSAGE_LIMIT_PER_DAY: z.coerce.number().int().positive().default(50),
   USER_MESSAGE_LIMIT_PER_DAY: z.coerce.number().int().positive().default(1000),
-  GUEST_VOICE_LIMIT_PER_DAY: z.coerce.number().int().positive().default(10),
-  USER_FILE_LIMIT_PER_DAY: z.coerce.number().int().positive().default(100),
 }).superRefine((value, context) => {
   if (value.NODE_ENV !== 'production') return
   if (value.ALLOWED_ORIGINS.includes('localhost') || value.ALLOWED_ORIGINS.includes('127.0.0.1')) context.addIssue({ code: 'custom', path: ['ALLOWED_ORIGINS'], message: 'Production origins cannot use localhost' })
   if (value.RATE_LIMIT_SALT === 'quickchat-development-rate-limit-salt') context.addIssue({ code: 'custom', path: ['RATE_LIMIT_SALT'], message: 'Set a unique production rate-limit salt' })
   if (!value.SMTP_HOST) context.addIssue({ code: 'custom', path: ['SMTP_HOST'], message: 'SMTP is required in production' })
-  if (!value.VAPID_PUBLIC_KEY || !value.VAPID_PRIVATE_KEY) context.addIssue({ code: 'custom', path: ['VAPID_PUBLIC_KEY'], message: 'VAPID keys are required in production' })
-  if (value.CLAMAV_HOST === 'localhost') context.addIssue({ code: 'custom', path: ['CLAMAV_HOST'], message: 'Configure the production malware scanner host' })
 })
 
 export const env = serverEnvSchema.parse(process.env)

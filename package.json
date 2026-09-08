@@ -12,7 +12,6 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "test:e2e": "playwright test",
     "test:e2e:list": "playwright test --list",
-    "test:load": "k6 run tests/load/messaging.js",
     "security:deps": "pnpm audit --prod --audit-level high"
   },
   "keywords": [],
@@ -26,6 +25,7 @@
     }
   },
   "type": "module",
+  "engines": { "node": "22.x" },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "concurrently": "^10.0.5",

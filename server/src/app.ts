@@ -8,11 +8,6 @@ import { env } from './env.js'
 import profile from './profile/routes.js'
 import conversationRoutes from './conversations/routes.js'
 import messageRoutes from './messages/routes.js'
-import messageActions from './messages/actions.js'
-import mediaRoutes from './media/routes.js'
-import presenceRoutes from './presence/routes.js'
-import notificationRoutes from './notifications/routes.js'
-import safetyRoutes from './safety/routes.js'
 import settingsRoutes from './settings/routes.js'
 import { captureException } from './ops/instrumentation.js'
 import { logger } from './ops/logger.js'
@@ -20,11 +15,11 @@ import { observeRequests, protectOrigin, rateLimit } from './ops/middleware.js'
 import type { AppVariables } from './auth/middleware.js'
 import { db } from './db/client.js'
 import { sql } from 'drizzle-orm'
-import { getRedis } from './sync/stream.js'
 import { HTTPException } from 'hono/http-exception'
 
 export const app = new Hono<{ Variables: AppVariables }>()
 app.use('*', observeRequests)
+app.use('*', async (context, next) => { context.header('Cache-Control', 'private, no-store'); await next() })
 app.use('*', secureHeaders({ contentSecurityPolicy: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] }, strictTransportSecurity: env.NODE_ENV === 'production' ? 'max-age=63072000; includeSubDomains; preload' : false }))
 app.use('*', cors({ origin: env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()), credentials: true, allowHeaders: ['Content-Type', 'X-Request-Id'], exposeHeaders: ['X-Request-Id', 'RateLimit-Limit', 'RateLimit-Remaining'] }))
 app.use('/api/*', protectOrigin)
@@ -32,23 +27,17 @@ app.use('/api/*', bodyLimit({ maxSize: 1024 * 1024, onError: (context) => contex
 app.use('/api/*', rateLimit())
 app.use('/api/v1/auth/*', rateLimit(30, 'auth'))
 app.get('/', (context) => context.json({ name: 'Quickchat API', status: 'ok' }))
-app.get('/health', (context) => context.json({ status: 'ok', transport: 'websocket' }))
+app.get('/health', (context) => context.json({ status: 'ok', transport: 'polling' }))
 app.get('/health/live', (context) => context.json({ status: 'live' }))
 app.get('/health/ready', async (context) => {
-  const dependencies = { postgres: false, redis: false }
+  const dependencies = { postgres: false }
   try { await db.execute(sql`select 1`); dependencies.postgres = true } catch { /* Report dependency as unavailable. */ }
-  try { dependencies.redis = await getRedis().ping() === 'PONG' } catch { /* Report dependency as unavailable. */ }
-  return dependencies.postgres && dependencies.redis ? context.json({ status: 'ready', dependencies }) : context.json({ status: 'not_ready', dependencies }, 503)
+  return dependencies.postgres ? context.json({ status: 'ready', dependencies }) : context.json({ status: 'not_ready', dependencies }, 503)
 })
 app.route('/api/v1/auth', auth)
 app.route('/api/v1', profile)
 app.route('/api/v1/conversations', conversationRoutes)
 app.route('/api/v1', messageRoutes)
-app.route('/api/v1/messages', messageActions)
-app.route('/api/v1/uploads', mediaRoutes)
-app.route('/api/v1', presenceRoutes)
-app.route('/api/v1/push-subscriptions', notificationRoutes)
-app.route('/api/v1', safetyRoutes)
 app.route('/api/v1', settingsRoutes)
 app.onError((error, context) => {
   if (error instanceof HTTPException) return context.json({ error: { code: 'SERVICE_UNAVAILABLE', message: error.message } }, error.status)

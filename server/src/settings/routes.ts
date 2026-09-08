@@ -5,8 +5,8 @@ import { z } from 'zod'
 import { type AppVariables, requireAuth, sessionCookieName } from '../auth/middleware.js'
 import { hashPassword, verifyPassword } from '../auth/security.js'
 import { db } from '../db/client.js'
-import { credentials, eventOutbox, sessions, users } from '../db/schema.js'
-import { accountDeletionDate, describeDevice } from './service.js'
+import { credentials, sessions, users } from '../db/schema.js'
+import { describeDevice } from './service.js'
 import { cookieOptions } from '../auth/cookies.js'
 
 const routes = new Hono<{ Variables: AppVariables }>()
@@ -45,22 +45,6 @@ routes.post('/password', async (context) => {
     await tx.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.userId, userId), ne(sessions.id, context.get('sessionId')), isNull(sessions.revokedAt)))
   })
   return context.json({ changed: true })
-})
-
-routes.post('/export', async (context) => {
-  const userId = context.get('user').id
-  const [request] = await db.insert(eventOutbox).values({ aggregateId: userId, type: 'account.export.requested', payload: { userId, requestedAt: new Date().toISOString() } }).returning({ id: eventOutbox.id, createdAt: eventOutbox.createdAt })
-  return context.json({ request }, 202)
-})
-
-routes.delete('/account', async (context) => {
-  const input = z.object({ password: z.string().max(128) }).parse(await context.req.json()); const userId = context.get('user').id
-  const [credential] = await db.select().from(credentials).where(eq(credentials.userId, userId)).limit(1)
-  if (!credential || !(await verifyPassword(credential.passwordHash, input.password))) return context.json({ error: { code: 'INVALID_PASSWORD', message: 'Password is incorrect' } }, 403)
-  const deletionScheduledAt = accountDeletionDate()
-  await db.transaction(async (tx) => { await tx.update(users).set({ deletionScheduledAt, updatedAt: new Date() }).where(eq(users.id, userId)); await tx.update(sessions).set({ revokedAt: new Date() }).where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt))) })
-  deleteCookie(context, sessionCookieName, cookieOptions)
-  return context.json({ deletionScheduledAt })
 })
 
 export default routes

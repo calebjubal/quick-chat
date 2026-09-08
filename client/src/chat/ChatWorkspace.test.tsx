@@ -4,8 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { ChatWorkspace } from './ChatWorkspace'
 import { useChatStore, type ConversationEntry } from './store'
 
-vi.mock('../lib/realtime', () => ({ RealtimeClient: class extends EventTarget { connect() {} close() {} } }))
-vi.mock('../notifications', () => ({ updateNotificationFocus: vi.fn().mockResolvedValue(undefined), enablePushNotifications: vi.fn() }))
+vi.mock('../lib/polling', () => ({ startPolling: () => () => {} }))
 const guest = { id: 'guest-id', displayName: 'Alex', username: null, isGuest: true }
 const entry = (id: string, direction: 'created' | 'sent'): ConversationEntry => ({ conversation: { id, type: 'shared', title: id, createdBy: direction === 'created' ? guest.id : 'other', updatedAt: new Date().toISOString() }, direction, participants: [], membership: { lastReadSequence: 0, pinnedAt: null, mutedUntil: null, archivedAt: null } })
 const props = { user: guest, onJoinComplete: vi.fn(), onSignedOut: vi.fn(), onRequireAccount: vi.fn() }
@@ -22,12 +21,12 @@ describe('guest chat workspace', () => {
     expect(screen.queryByText('Received room')).not.toBeNull()
     expect(screen.queryByText('Created room')).toBeNull()
   })
-  it('offers voice notes but gates files and video behind account creation', () => {
+  it('shows text controls without development-only features', () => {
     useChatStore.setState({ conversations: [entry('Room', 'created')], selectedId: 'Room' })
     render(<ChatWorkspace {...props} />)
-    expect(screen.getByRole('button', { name: 'Record voice note' })).not.toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Create an account to attach files' }))
-    expect(screen.getByRole('heading', { name: 'Unlock the full app' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Send' })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Record voice note' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Attach file' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Start video call' })).toBeNull()
   })
   it('asks for a name before joining an invitation', () => {

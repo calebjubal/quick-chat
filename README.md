@@ -1,64 +1,26 @@
-# quick-chat
+# Quickchat — simple Vercel edition
 
-## Finalised stack
+`main` serves the React frontend and Hono API from **one Vercel project**, with Neon PostgreSQL and SMTP email delivery. No Redis, object storage, scanner, push service, WebSocket server, or background worker is required.
 
-| Layer                | Final choice                                |
-| -------------------- | ------------------------------------------- |
-| Language             | TypeScript throughout                       |
-| Package management   | pnpm workspace                              |
-| Frontend             | Vite + React                                |
-| Styling              | Tailwind CSS                                |
-| Routing              | TanStack Router                             |
-| Client state         | Zustand                                     |
-| Local database       | IndexedDB through Dexie                     |
-| Large chat rendering | TanStack Virtual                            |
-| Real-time transport  | Native WebSocket                            |
-| Offline support      | Service Worker/PWA                          |
-| Backend              | Node.js + Hono                              |
-| WebSocket server     | `ws`                                        |
-| Validation           | Zod                                         |
-| Database             | PostgreSQL                                  |
-| ORM/migrations       | Drizzle ORM + Drizzle Kit                   |
-| Event distribution   | Redis Streams                               |
-| Media storage        | S3-compatible object storage                |
-| Authentication       | Secure HTTP-only cookie sessions            |
-| Testing              | Vitest + Playwright                         |
-| Load testing         | k6                                          |
-| Monitoring           | OpenTelemetry + Sentry                      |
-| Frontend hosting     | Vercel                                      |
-| Backend hosting      | Docker-based, long-running Node service     |
-| Initial region       | Mumbai/India, close to PostgreSQL and Redis |
-| CI/CD                | GitHub Actions                              |
+## Branches
 
-![Architecture](image.png)
+- `main`: shared chat links, guest names, persistent text messaging, verified email accounts, account upgrade, profiles, sessions and themes. Visible conversations refresh every three seconds; hidden tabs pause polling.
+- `codex/dev`: complete pre-simplification feature implementation at `2af309e`, including media, voice notes, video calls, push, presence, durable realtime transport, workers and infrastructure. These features and their tests are recoverable there. Neither branch is pushed by this task.
 
-### Frontend deployment
+No database tables or existing customer data are removed. This version cannot upload or play media. Existing media records remain available to the development version. Automatic expiry, export jobs and scheduled deletion are not offered without their worker.
 
-Deploy client/ to Vercel as a static Vite application:
+## Run and deploy
 
-- Build command: pnpm build
-- Output directory: dist
-- No SSR
-- No Next.js
-- No server dependency for opening cached conversations
-- Set `VITE_API_URL=https://<api-host>` and `VITE_WS_URL=wss://<api-host>/ws` in Vercel.
-- Keep the Vercel project Root Directory set to `client`; `client/vercel.json` installs from the workspace lockfile.
+See [single-project Vercel setup](docs/vercel-server.md) for the small environment list and migration commands.
 
-### Backend deployment
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+pnpm check
+```
 
-For the existing Vercel **server** project, follow [server environment variables and deployment setup](docs/vercel-server.md). Set Root Directory to `server`; the API has an explicit Node function entrypoint. A separate worker is still required.
+Local API defaults to port 3001; Vite proxies `/api` there. Production always uses the same origin even if old `VITE_API_URL` settings remain in the dashboard. Use the repository root as Vercel Root Directory, Other as the framework, and Node 22.
 
-Keep server/ as a long-running Node.js application:
+Guest accounts can create five shared chats, join unlimited received chats, and send 50 text messages per rolling day. Registered accounts can send 1,000. Login requires a verified email; SMTP must be configured. This release does not promise offline sending: failed sends keep the draft for retry.
 
-- Hono handles REST endpoints.
-- ws handles persistent WebSocket connections.
-- Docker packages the server.
-- REST is used for authentication, initial sync and media-upload URLs.
-- WebSocket is used for message events, acknowledgements, presence and typing.
-- One-to-one calls use WebRTC with authenticated WebSocket signaling and production TURN credentials.
-
-## Local production stack
-
-Run `docker compose up --build` to start PostgreSQL, Redis, MinIO, the migration release job, API, and background worker. The local credentials in `compose.yaml` are intentionally development-only and must never be copied to a deployed environment.
-
-The complete production checklist, backup and rollback requirements, health probes, Vercel setup, and Mumbai topology are in [docs/deployment.md](docs/deployment.md).
+The red, gold and yellow theme, real empty states, and self-hosted font are preserved. No demo users or messages are bundled.

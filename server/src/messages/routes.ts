@@ -3,10 +3,8 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { type AppVariables, requireAuth } from '../auth/middleware.js'
 import { db } from '../db/client.js'
-import { attachments, conversationMembers, conversations, eventOutbox, messages } from '../db/schema.js'
-import { publishEvent } from '../sync/stream.js'
+import { attachments, conversationMembers, conversations, messages } from '../db/schema.js'
 import { MAX_MESSAGE_LENGTH, messageCursor, parseMessageCursor } from './rules.js'
-import { notifyConversation } from '../notifications/service.js'
 import { directConversationIsBlocked } from '../safety/service.js'
 import { messageLimitFor } from '../usage/limits.js'
 
@@ -33,6 +31,7 @@ routes.post('/conversations/:conversationId/messages', async (context) => {
   if (!(await isMember(conversationId, senderId))) return context.json({ error: { code: 'NOT_FOUND', message: 'Conversation not found' } }, 404)
   if (await directConversationIsBlocked(conversationId)) return context.json({ error: { code: 'MESSAGING_UNAVAILABLE', message: 'Messaging is unavailable for this conversation' } }, 403)
   const input = z.object({ id: z.string().uuid(), body: z.string().trim().min(1).max(MAX_MESSAGE_LENGTH).optional(), attachmentId: z.string().uuid().optional(), replyToId: z.string().uuid().optional(), forwarded: z.boolean().default(false) }).refine((value) => value.body || value.attachmentId, 'A message or attachment is required').parse(await context.req.json())
+  if (input.attachmentId) return context.json({ error: { code: 'FEATURE_UNAVAILABLE', message: 'Attachments are available on the dev version only' } }, 422)
   const existing = await db.select().from(messages).where(eq(messages.id, input.id)).limit(1)
   if (existing[0]) {
     if (existing[0].senderId !== senderId || existing[0].conversationId !== conversationId) return context.json({ error: { code: 'ID_CONFLICT', message: 'Message ID is already in use' } }, 409)
@@ -49,13 +48,10 @@ routes.post('/conversations/:conversationId/messages', async (context) => {
   const event = await db.transaction(async (tx) => {
     const [counter] = await tx.update(conversations).set({ nextSequence: sql`${conversations.nextSequence} + 1`, updatedAt: new Date() }).where(eq(conversations.id, conversationId)).returning({ sequence: conversations.nextSequence, disappearingSeconds: conversations.disappearingSeconds })
     const sequence = counter.sequence - 1
-    const [message] = await tx.insert(messages).values({ id: input.id, body: input.body, replyToId: input.replyToId, forwarded: input.forwarded, kind: attachment?.kind ?? 'text', conversationId, senderId, sequence, expiresAt: counter.disappearingSeconds ? new Date(Date.now() + counter.disappearingSeconds * 1000) : null }).returning()
+    const [message] = await tx.insert(messages).values({ id: input.id, body: input.body, replyToId: input.replyToId, forwarded: input.forwarded, kind: attachment?.kind ?? 'text', conversationId, senderId, sequence, expiresAt: null }).returning()
     if (attachment) await tx.update(attachments).set({ messageId: message.id }).where(and(eq(attachments.id, attachment.id), isNull(attachments.messageId)))
-    const [outbox] = await tx.insert(eventOutbox).values({ aggregateId: conversationId, type: 'message.created', payload: { message, requestId: context.get('requestId') } }).returning()
-    return { message, outboxId: outbox.id }
+    return { message }
   })
-  publishEvent(conversationId, { type: 'message.created', ...event }).catch(() => undefined)
-  notifyConversation(conversationId, senderId, context.get('user').displayName).catch(() => undefined)
   return context.json({ message: { ...event.message, attachment: attachment ? { id: attachment.id, fileName: attachment.fileName, kind: attachment.kind, mimeType: attachment.mimeType, metadata: attachment.metadata } : null }, quota: { used: usage.count + 1, limit: dailyLimit } }, 201)
 })
 
