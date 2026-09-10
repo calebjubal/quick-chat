@@ -6,6 +6,7 @@ import { env } from '../env.js'
 import { consumeRateLimit } from './rate-limit.js'
 import { captureException } from './instrumentation.js'
 import { logger } from './logger.js'
+import { allowedOrigins } from '../auth/origins.js'
 
 const requestCounter = metrics.getMeter('quickchat-api').createCounter('http.server.requests')
 const requestDuration = metrics.getMeter('quickchat-api').createHistogram('http.server.duration', { unit: 'ms' })
@@ -31,7 +32,7 @@ export const observeRequests = createMiddleware<{ Variables: AppVariables }>(asy
 export const protectOrigin = createMiddleware(async (context, next) => {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(context.req.method)) {
     const origin = context.req.header('origin')
-    if (!origin || !env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()).includes(origin)) return context.json({ error: { code: 'INVALID_ORIGIN', message: 'Request origin is not allowed' } }, 403)
+    if (!origin || !allowedOrigins(env.APP_URL, env.ALLOWED_ORIGINS).includes(origin)) return context.json({ error: { code: 'INVALID_ORIGIN', message: 'Request origin is not allowed' } }, 403)
   }
   await next()
 })

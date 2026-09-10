@@ -16,12 +16,13 @@ import type { AppVariables } from './auth/middleware.js'
 import { db } from './db/client.js'
 import { sql } from 'drizzle-orm'
 import { HTTPException } from 'hono/http-exception'
+import { allowedOrigins } from './auth/origins.js'
 
 export const app = new Hono<{ Variables: AppVariables }>()
 app.use('*', observeRequests)
 app.use('*', async (context, next) => { context.header('Cache-Control', 'private, no-store'); await next() })
 app.use('*', secureHeaders({ contentSecurityPolicy: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] }, strictTransportSecurity: env.NODE_ENV === 'production' ? 'max-age=63072000; includeSubDomains; preload' : false }))
-app.use('*', cors({ origin: env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()), credentials: true, allowHeaders: ['Content-Type', 'X-Request-Id'], exposeHeaders: ['X-Request-Id', 'RateLimit-Limit', 'RateLimit-Remaining'] }))
+app.use('*', cors({ origin: allowedOrigins(env.APP_URL, env.ALLOWED_ORIGINS), credentials: true, allowHeaders: ['Content-Type', 'X-Request-Id'], exposeHeaders: ['X-Request-Id', 'RateLimit-Limit', 'RateLimit-Remaining'] }))
 app.use('/api/*', protectOrigin)
 app.use('/api/*', bodyLimit({ maxSize: 1024 * 1024, onError: (context) => context.json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request payload is too large' } }, 413) }))
 app.use('/api/*', rateLimit())

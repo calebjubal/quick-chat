@@ -32,7 +32,9 @@ SMTP_FROM=Quickchat <no-reply@your-verified-domain>
 COOKIE_SAME_SITE=Lax
 ```
 
-No `VITE_*`, Redis, S3, ClamAV, VAPID, TURN or worker variables are needed. SMTP port 465 is also supported. The email provider's sender/domain must be verified. Registration, verification, guest upgrade and password resets use SMTP; there is no verification bypass.
+No `VITE_*`, Redis, S3, ClamAV, VAPID, TURN or worker variables are needed. SMTP port 465 is also supported. The email provider's sender/domain must be verified. Registration, verification, guest upgrade and password resets use SMTP; there is no verification bypass. Guest access and existing verified-account login remain available without SMTP; email-dependent actions return 503 until configured.
+
+For the current deployment, both `APP_URL` and `ALLOWED_ORIGINS` must be `https://server-one-peach-29.vercel.app` (not localhost). Set `NODE_ENV=production` for Secure, HTTP-only cookies. Environment changes apply to the next deployment, not the running one. Release the corrected code together with these variables.
 
 Do not paste secrets into chat or commit env files. Rotate the previously shared Neon credential. Preview deployments should use separate databases/email configuration and their own explicitly allowed origin.
 

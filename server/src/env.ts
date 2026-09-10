@@ -25,7 +25,7 @@ export const serverEnvSchema = z.object({
   if (value.NODE_ENV !== 'production') return
   if (value.ALLOWED_ORIGINS.includes('localhost') || value.ALLOWED_ORIGINS.includes('127.0.0.1')) context.addIssue({ code: 'custom', path: ['ALLOWED_ORIGINS'], message: 'Production origins cannot use localhost' })
   if (value.RATE_LIMIT_SALT === 'quickchat-development-rate-limit-salt') context.addIssue({ code: 'custom', path: ['RATE_LIMIT_SALT'], message: 'Set a unique production rate-limit salt' })
-  if (!value.SMTP_HOST) context.addIssue({ code: 'custom', path: ['SMTP_HOST'], message: 'SMTP is required in production' })
+  if (new URL(value.APP_URL).protocol !== 'https:' || ['localhost', '127.0.0.1'].includes(new URL(value.APP_URL).hostname)) context.addIssue({ code: 'custom', path: ['APP_URL'], message: 'Production app URL must use public HTTPS' })
 })
 
 export const env = serverEnvSchema.parse(process.env)
