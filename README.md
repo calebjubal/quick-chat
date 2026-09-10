@@ -23,4 +23,4 @@ Local API defaults to port 3001; Vite proxies `/api` there. Production always us
 
 Guest accounts can create five shared chats, join unlimited received chats, and send 50 text messages per rolling day. Registered accounts can send 1,000. Login requires a verified email; SMTP must be configured. This release does not promise offline sending: failed sends keep the draft for retry.
 
-The red, gold and yellow theme, real empty states, and self-hosted font are preserved. No demo users or messages are bundled.
+Graphite and electric-mint dark mode, a light theme, real empty states, and a self-hosted font keep the interface focused. No demo users or messages are bundled.

@@ -1,4 +1,6 @@
+/// <reference types="node" />
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 
 const luminance = (hex: string) => {
   const channels = hex.match(/[\da-f]{2}/gi)!.map((value) => Number.parseInt(value, 16) / 255).map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
@@ -6,9 +8,10 @@ const luminance = (hex: string) => {
 }
 const contrast = (foreground: string, background: string) => { const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a); return (values[0] + 0.05) / (values[1] + 0.05) }
 
-describe('Flash-inspired palette', () => {
-  it.each([
-    ['#26120d', '#fff8ef'], ['#715d55', '#ffffff'], ['#ffffff', '#b51e2e'],
-    ['#fff5e6', '#16090a'], ['#cdb9ac', '#211012'], ['#211012', '#ffc928'],
-  ])('keeps readable foreground %s on %s', (foreground, background) => expect(contrast(foreground, background)).toBeGreaterThanOrEqual(4.5))
+describe('production palette', () => {
+  const css = readFileSync(new URL('./index.css', import.meta.url), 'utf8')
+  for (const [theme, block] of ['light', 'dark'].map((theme, index) => [theme, css.split('}')[index]])) {
+    const tokens = Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[\da-f]{6})/gi)].map((match) => [match[1], match[2]]))
+    it.each([['text', 'canvas'], ['text', 'surface'], ['muted', 'surface'], ['on-brand', 'brand'], ['text', 'outgoing']])(`${theme}: readable %s on %s`, (foreground, background) => expect(contrast(tokens[foreground], tokens[background])).toBeGreaterThanOrEqual(4.5))
+  }
 })
